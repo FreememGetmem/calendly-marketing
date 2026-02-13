@@ -192,9 +192,9 @@ def write_to_bronze_layer(spend_records: List[Dict[str, Any]], execution_date: d
     for key, records in records_by_date_channel.items():
         date, channel = key.split('_', 1)
         s3_key = (f"marketing_spend/"
-                 f"channel={channel}/"
-                 f"date={date}/"
-                 f"spend_data.json")
+                  f"channel={channel}/"
+                  f"date={date}/"
+                  f"spend_data.json")
         # Prepare the data structure for Delta Lake
         data_to_write = {
             'records': records,

@@ -198,8 +198,8 @@ def extract_date(timestamp_str: str) -> str:
         try:
             dt = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
             return dt.strftime('%Y-%m-%d')
-        except:
-            pass
+        except Exception as e:
+            raise e
     return None
 
 
@@ -209,8 +209,8 @@ def extract_year(timestamp_str: str) -> int:
         try:
             dt = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
             return dt.year
-        except:
-            pass
+        except Exception as e:
+            raise e
     return None
 
 
@@ -220,8 +220,8 @@ def extract_month(timestamp_str: str) -> int:
         try:
             dt = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
             return dt.month
-        except:
-            pass
+        except Exception as e:
+            raise e
     return None
 
 
@@ -231,8 +231,8 @@ def extract_day(timestamp_str: str) -> int:
         try:
             dt = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
             return dt.day
-        except:
-            pass
+        except Exception as e:
+            raise e
     return None
 
 
@@ -242,8 +242,8 @@ def extract_hour(timestamp_str: str) -> int:
         try:
             dt = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
             return dt.hour
-        except:
-            pass
+        except Exception as e:
+            raise e
     return None
 
 
@@ -253,8 +253,8 @@ def extract_day_of_week(timestamp_str: str) -> str:
         try:
             dt = datetime.fromisoformat(timestamp_str.replace('Z', '+00:00'))
             return dt.strftime('%A')
-        except:
-            pass
+        except Exception as e:
+            raise e
     return None
 
 

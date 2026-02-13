@@ -6,7 +6,6 @@ Receives webhooks from Calendly and streams to Kinesis
 import json
 import os
 import boto3
-import base64
 from datetime import datetime
 from typing import Dict, Any
 import logging
@@ -122,13 +121,12 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         )
         logger.info(f"Sent to Kinesis: ShardId={kinesis_response['ShardId']}, "
                    f"SequenceNumber={kinesis_response['SequenceNumber']}")
-        return {
-            'statusCode': 200,
-            'headers': {
-                'Content-Type': 'application/json',
-                'Access-Control-Allow-Origin': '*'
-            },
-            'body': json.dumps({
+        return {'statusCode': 200,
+                'headers': {
+                                'Content-Type': 'application/json',
+                                'Access-Control-Allow-Origin': '*'
+                            },
+                'body': json.dumps({
                 'message': 'Webhook processed successfully',
                 'kinesis_sequence_number': kinesis_response['SequenceNumber'],
                 'marketing_channel': marketing_channel
