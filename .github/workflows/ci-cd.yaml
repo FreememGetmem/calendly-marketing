@@ -94,14 +94,14 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID_DEV }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: ${{ secrets.python-version }}
+          python-version: ${{ secrets.python-version_DEV }}
 
       - name: Package Lambda functions
         run: |
@@ -114,11 +114,11 @@ jobs:
 
       - name: Upload Lambda package to S3
         run: |
-          aws s3 cp src/lambda/lambda-package.zip s3://calendly-artifacts-dev-${{ secrets.AWS_ACCOUNT_ID }}/lambda/
+          aws s3 cp src/lambda/lambda-package.zip s3://calendly-artifacts-dev-${{ secrets.AWS_ACCOUNT_ID_DEV }}/lambda/
 
       - name: Upload Glue scripts to S3
         run: |
-          aws s3 sync src/glue/ s3://calendly-artifacts-dev-${{ secrets.AWS_ACCOUNT_ID }}/scripts/
+          aws s3 sync src/glue/ s3://calendly-artifacts-dev-${{ secrets.AWS_ACCOUNT_ID_DEV }}/scripts/
 
       - name: Deploy CloudFormation stack
         run: |
@@ -137,7 +137,7 @@ jobs:
             --parameter-overrides \
               Environment=dev \
               MainStackName=calendly-main-stack-dev \
-              GlueScriptsBucket=calendly-artifacts-dev-${{ secrets.AWS_ACCOUNT_ID }} \
+              GlueScriptsBucket=calendly-artifacts-dev-${{ secrets.AWS_ACCOUNT_ID_DEV }} \
             --capabilities CAPABILITY_NAMED_IAM \
             --no-fail-on-empty-changeset
 
@@ -150,17 +150,17 @@ jobs:
 
           aws lambda update-function-code \
             --function-name calendly-webhook-receiver-dev \
-            --s3-bucket calendly-artifacts-dev-${{ secrets.AWS_ACCOUNT_ID }} \
+            --s3-bucket calendly-artifacts-dev-${{ secrets.AWS_ACCOUNT_ID_DEV }} \
             --s3-key lambda/lambda-package.zip
 
           aws lambda update-function-code \
             --function-name calendly-kinesis-processor-dev \
-            --s3-bucket calendly-artifacts-dev-${{ secrets.AWS_ACCOUNT_ID }} \
+            --s3-bucket calendly-artifacts-dev-${{ secrets.AWS_ACCOUNT_ID_DEV }} \
             --s3-key lambda/lambda-package.zip
 
           aws lambda update-function-code \
             --function-name calendly-spend-ingestion-dev \
-            --s3-bucket calendly-artifacts-dev-${{ secrets.AWS_ACCOUNT_ID }} \
+            --s3-bucket calendly-artifacts-dev-${{ secrets.AWS_ACCOUNT_ID_DEV_ }} \
             --s3-key lambda/lambda-package.zip
 
       - name: Run integration tests
@@ -181,8 +181,8 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID_PROD }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY_PROD }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
 
       - name: Set up Python
