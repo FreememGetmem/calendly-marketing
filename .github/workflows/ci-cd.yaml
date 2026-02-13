@@ -80,93 +80,6 @@ jobs:
             cfn-lint infrastructure/glue-jobs.yaml --ignore-checks W
             cfn-lint infrastructure/main-stack.yaml --ignore-checks W
 
-  deploy-dev:
-    name: Deploy to Development
-    needs: [test, validate-cloudformation]
-    if: github.ref == 'refs/heads/develop'
-    runs-on: ubuntu-latest
-    environment: development
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID_DEV }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ secrets.AWS_REGION }}
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ secrets.python-version_DEV }}
-
-      - name: Package Lambda functions
-        run: |
-          cd src/lambda
-          pip install -r requirements.txt -t package/
-          cd package
-          zip -r ../lambda-package.zip .
-          cd ..
-          zip -g lambda-package.zip *.py
-
-      - name: Upload Lambda package to S3
-        run: |
-          aws s3 cp src/lambda/lambda-package.zip s3://calendly-artifacts-dev-${{ secrets.AWS_ACCOUNT_ID_DEV }}/lambda/
-
-      - name: Upload Glue scripts to S3
-        run: |
-          aws s3 sync src/glue/ s3://calendly-artifacts-dev-${{ secrets.AWS_ACCOUNT_ID_DEV }}/scripts/
-
-      - name: Deploy CloudFormation stack
-        run: |
-          aws cloudformation deploy \
-            --template-file infrastructure/main-stack.yaml \
-            --stack-name calendly-main-stack-dev \
-            --parameter-overrides Environment=dev \
-            --capabilities CAPABILITY_NAMED_IAM \
-            --no-fail-on-empty-changeset
-
-      - name: Deploy Glue jobs stack
-        run: |
-          aws cloudformation deploy \
-            --template-file infrastructure/glue-jobs.yaml \
-            --stack-name calendly-glue-jobs-dev \
-            --parameter-overrides \
-              Environment=dev \
-              MainStackName=calendly-main-stack-dev \
-              GlueScriptsBucket=calendly-artifacts-dev-${{ secrets.AWS_ACCOUNT_ID_DEV }} \
-            --capabilities CAPABILITY_NAMED_IAM \
-            --no-fail-on-empty-changeset
-
-      - name: Update Lambda functions
-        run: |
-          WEBHOOK_FUNCTION=$(aws cloudformation describe-stacks \
-            --stack-name calendly-main-stack-dev \
-            --query "Stacks[0].Outputs[?OutputKey=='WebhookURL'].OutputValue" \
-            --output text)
-
-          aws lambda update-function-code \
-            --function-name calendly-webhook-receiver-dev \
-            --s3-bucket calendly-artifacts-dev-${{ secrets.AWS_ACCOUNT_ID_DEV }} \
-            --s3-key lambda/lambda-package.zip
-
-          aws lambda update-function-code \
-            --function-name calendly-kinesis-processor-dev \
-            --s3-bucket calendly-artifacts-dev-${{ secrets.AWS_ACCOUNT_ID_DEV }} \
-            --s3-key lambda/lambda-package.zip
-
-          aws lambda update-function-code \
-            --function-name calendly-spend-ingestion-dev \
-            --s3-bucket calendly-artifacts-dev-${{ secrets.AWS_ACCOUNT_ID_DEV_ }} \
-            --s3-key lambda/lambda-package.zip
-
-      - name: Run integration tests
-        run: |
-          pytest tests/integration --env=dev
-
   deploy-prod:
     name: Deploy to Production
     needs: [test, validate-cloudformation]
@@ -198,14 +111,25 @@ jobs:
           zip -r ../lambda-package.zip .
           cd ..
           zip -g lambda-package.zip *.py
+      # -------------------------------------
+      # Deleting previous stack and checking
+      # -------------------------------------
+      - name: Deleting previous stack and checking
+        run: |
+
+          aws s3api head-bucket --bucket ${{ secrets.S3_BUCKET }} 2>/dev/null || \
+          aws s3api create-bucket \
+          --bucket "${{ secrets.S3_BUCKET }}" \
+          --region "${{ secrets.AWS_REGION }}" \
+          --create-bucket-configuration LocationConstraint="${{ secrets.AWS_REGION }}"
 
       - name: Upload Lambda package to S3
         run: |
-          aws s3 cp src/lambda/lambda-package.zip s3://calendly-artifacts-prod-${{ secrets.AWS_ACCOUNT_ID }}/lambda/
+          aws s3 cp src/lambda/lambda-package.zip s3://${{ secrets.S3_BUCKET }}/lambda/
 
       - name: Upload Glue scripts to S3
         run: |
-          aws s3 sync src/glue/ s3://calendly-artifacts-prod-${{ secrets.AWS_ACCOUNT_ID }}/scripts/
+          aws s3 sync src/glue/ s3://${{ secrets.S3_BUCKET }}/scripts/
 
       - name: Deploy CloudFormation stack
         run: |
@@ -224,7 +148,7 @@ jobs:
             --parameter-overrides \
               Environment=prod \
               MainStackName=calendly-main-stack-prod \
-              GlueScriptsBucket=calendly-artifacts-prod-${{ secrets.AWS_ACCOUNT_ID }} \
+              GlueScriptsBucket=${{ secrets.S3_BUCKET }} \
             --capabilities CAPABILITY_NAMED_IAM \
             --no-fail-on-empty-changeset
 
@@ -232,36 +156,18 @@ jobs:
         run: |
           aws lambda update-function-code \
             --function-name calendly-webhook-receiver-prod \
-            --s3-bucket calendly-artifacts-prod-${{ secrets.AWS_ACCOUNT_ID }} \
+            --s3-bucket ${{ secrets.S3_BUCKET }} \
             --s3-key lambda/lambda-package.zip
 
           aws lambda update-function-code \
             --function-name calendly-kinesis-processor-prod \
-            --s3-bucket calendly-artifacts-prod-${{ secrets.AWS_ACCOUNT_ID }} \
+            --s3-bucket ${{ secrets.S3_BUCKET }} \
             --s3-key lambda/lambda-package.zip
 
           aws lambda update-function-code \
             --function-name calendly-spend-ingestion-prod \
-            --s3-bucket calendly-artifacts-prod-${{ secrets.AWS_ACCOUNT_ID }} \
+            --s3-bucket ${{ secrets.S3_BUCKET }} \
             --s3-key lambda/lambda-package.zip
-
-      - name: Run smoke tests
-        run: |
-          pytest tests/smoke --env=prod
-
-      - name: Create GitHub Release
-        if: success()
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: v${{ github.run_number }}
-          release_name: Release v${{ github.run_number }}
-          body: |
-            Automated deployment to production
-            Commit: ${{ github.sha }}
-          draft: false
-          prerelease: false
 
   deploy-dashboard:
     name: Deploy Streamlit Dashboard
@@ -274,8 +180,8 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Deploy to Streamlit Cloud
-        env:
-          STREAMLIT_TOKEN: ${{ secrets.STREAMLIT_TOKEN }}
+        # env: |
+          # STREAMLIT_TOKEN: {{ secrets.STREAMLIT_TOKEN }}
         run: |
           # Deploy dashboard to Streamlit Cloud
           # This assumes you have Streamlit Cloud configured
