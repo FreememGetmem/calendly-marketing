@@ -9,11 +9,6 @@ on:
     branches:
       - main
       - develop
-
-env:
-  AWS_REGION: us-west-1
-  PYTHON_VERSION: '3.11'
-
 jobs:
   test:
     name: Test and Lint
@@ -26,7 +21,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: ${{ env.AWS_REGION }}
+          python-version: ${{ secrets.PYTHON_VERSION }}
 
       - name: Cache pip packages
         uses: actions/cache@v4
@@ -68,7 +63,7 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
+          aws-region: ${{ secrets.AWS_REGION }}
 
       - name: Validate CloudFormation templates
         run: |
@@ -101,12 +96,12 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
+          aws-region: ${{ secrets.AWS_REGION }}
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: ${{ env.AWS_REGION }}
+          python-version: ${{ secrets.python-version }}
 
       - name: Package Lambda functions
         run: |
@@ -188,12 +183,12 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID_PROD }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY_PROD }}
-          aws-region: ${{ env.AWS_REGION }}
+          aws-region: ${{ secrets.AWS_REGION }}
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: ${{ env.AWS_REGION }}
+          python-version: ${{ secrets.python-version }}
 
       - name: Package Lambda functions
         run: |
