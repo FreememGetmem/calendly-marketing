@@ -131,7 +131,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                                         'kinesis_sequence_number': kinesis_response['SequenceNumber'],
                                         'marketing_channel': marketing_channel
                                     })
-        }
+                }
     except Exception as e:
         logger.error(f"Error processing webhook: {str(e)}", exc_info=True)
         return {
