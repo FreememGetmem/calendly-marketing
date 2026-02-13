@@ -80,7 +80,9 @@ jobs:
       - name: CFN Lint
         uses: scottbrenner/cfn-lint-action@v2
         with:
-          command: cfn-lint infrastructure/*.yaml
+          command: |
+            cfn-lint infrastructure/glue-jobs.yaml
+            cfn-lint infrastructure/main-stack.yaml
 
   deploy-dev:
     name: Deploy to Development
