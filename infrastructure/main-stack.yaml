@@ -1,0 +1,636 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Calendly Marketing Analytics Pipeline - Main Stack (Lambda Architecture)'
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - staging
+      - prod
+    Description: Environment name
+  
+  OrganizationURL:
+    Type: String
+    Default: 'https://api.calendly.com/organizations/8910725e-6409-44dc-ba57-ead6dd48b052'
+    Description: Calendly Organization URL
+  
+  GlueDBName:
+    Type: String
+    Default: calendly_analytics_db
+    Description: Glue Database Name
+
+Resources:
+  # ========================================
+  # S3 Buckets (Data Lake Layers)
+  # ========================================
+  
+  RawDataBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'calendly-raw-${Environment}-${AWS::AccountId}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldVersions
+            Status: Enabled
+            NoncurrentVersionExpirationInDays: 30
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Layer
+          Value: Raw
+        - Key: Environment
+          Value: !Ref Environment
+
+  BronzeDataBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'calendly-bronze-${Environment}-${AWS::AccountId}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      VersioningConfiguration:
+        Status: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Layer
+          Value: Bronze
+        - Key: Environment
+          Value: !Ref Environment
+
+  SilverDataBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'calendly-silver-${Environment}-${AWS::AccountId}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      VersioningConfiguration:
+        Status: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Layer
+          Value: Silver
+        - Key: Environment
+          Value: !Ref Environment
+
+  GoldDataBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'calendly-gold-${Environment}-${AWS::AccountId}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      VersioningConfiguration:
+        Status: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Layer
+          Value: Gold
+        - Key: Environment
+          Value: !Ref Environment
+
+  # ========================================
+  # Kinesis Data Stream
+  # ========================================
+  
+  CalendlyEventsStream:
+    Type: AWS::Kinesis::Stream
+    Properties:
+      Name: !Sub 'calendly-events-stream-${Environment}'
+      ShardCount: 1
+      RetentionPeriodHours: 24
+      StreamEncryption:
+        EncryptionType: KMS
+        KeyId: alias/aws/kinesis
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+
+  # ========================================
+  # DynamoDB for State Management
+  # ========================================
+  
+  PipelineStateDDB:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub 'calendly-pipeline-state-${Environment}'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: pipeline_id
+          AttributeType: S
+        - AttributeName: execution_date
+          AttributeType: S
+      KeySchema:
+        - AttributeName: pipeline_id
+          KeyType: HASH
+        - AttributeName: execution_date
+          KeyType: RANGE
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      SSESpecification:
+        SSEEnabled: true
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+
+  # ========================================
+  # IAM Roles
+  # ========================================
+  
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'calendly-lambda-role-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
+        - 'arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole'
+      Policies:
+        - PolicyName: S3Access
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 's3:GetObject'
+                  - 's3:PutObject'
+                  - 's3:DeleteObject'
+                  - 's3:ListBucket'
+                Resource:
+                  - !GetAtt RawDataBucket.Arn
+                  - !Sub '${RawDataBucket.Arn}/*'
+                  - !GetAtt BronzeDataBucket.Arn
+                  - !Sub '${BronzeDataBucket.Arn}/*'
+        - PolicyName: KinesisAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'kinesis:PutRecord'
+                  - 'kinesis:PutRecords'
+                  - 'kinesis:GetRecords'
+                  - 'kinesis:GetShardIterator'
+                  - 'kinesis:DescribeStream'
+                  - 'kinesis:ListStreams'
+                Resource: !GetAtt CalendlyEventsStream.Arn
+        - PolicyName: DynamoDBAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'dynamodb:PutItem'
+                  - 'dynamodb:GetItem'
+                  - 'dynamodb:UpdateItem'
+                  - 'dynamodb:Query'
+                  - 'dynamodb:Scan'
+                Resource: !GetAtt PipelineStateDDB.Arn
+        - PolicyName: SecretsManagerAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'secretsmanager:GetSecretValue'
+                Resource: !Sub 'arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:calendly/*'
+
+  GlueExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'calendly-glue-role-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: glue.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AWSGlueServiceRole'
+      Policies:
+        - PolicyName: S3Access
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 's3:GetObject'
+                  - 's3:PutObject'
+                  - 's3:DeleteObject'
+                  - 's3:ListBucket'
+                Resource:
+                  - !GetAtt BronzeDataBucket.Arn
+                  - !Sub '${BronzeDataBucket.Arn}/*'
+                  - !GetAtt SilverDataBucket.Arn
+                  - !Sub '${SilverDataBucket.Arn}/*'
+                  - !GetAtt GoldDataBucket.Arn
+                  - !Sub '${GoldDataBucket.Arn}/*'
+
+  StepFunctionsRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'calendly-stepfunctions-role-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: states.amazonaws.com
+            Action: 'sts:AssumeRole'
+      Policies:
+        - PolicyName: LambdaInvoke
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'lambda:InvokeFunction'
+                Resource: !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:calendly-*'
+        - PolicyName: GlueJobs
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'glue:StartJobRun'
+                  - 'glue:GetJobRun'
+                  - 'glue:GetJobRuns'
+                  - 'glue:BatchStopJobRun'
+                Resource: '*'
+        - PolicyName: SNSPublish
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'sns:Publish'
+                Resource: !Ref PipelineNotificationTopic
+
+  # ========================================
+  # SNS Topic for Notifications
+  # ========================================
+  
+  PipelineNotificationTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub 'calendly-pipeline-notifications-${Environment}'
+      DisplayName: Calendly Pipeline Notifications
+      KmsMasterKeyId: alias/aws/sns
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+
+  # ========================================
+  # Glue Database & Crawler
+  # ========================================
+  
+  GlueDatabase:
+    Type: AWS::Glue::Database
+    Properties:
+      CatalogId: !Ref AWS::AccountId
+      DatabaseInput:
+        Name: !Ref GlueDBName
+        Description: Calendly Analytics Database
+
+  # ========================================
+  # Lambda Functions
+  # ========================================
+  
+  WebhookReceiverFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub 'calendly-webhook-receiver-${Environment}'
+      Runtime: python3.11
+      Handler: webhook_receiver.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 60
+      MemorySize: 512
+      Environment:
+        Variables:
+          KINESIS_STREAM_NAME: !Ref CalendlyEventsStream
+          RAW_BUCKET: !Ref RawDataBucket
+          ENVIRONMENT: !Ref Environment
+      Code:
+        ZipFile: |
+          import json
+          import os
+          import boto3
+          from datetime import datetime
+          
+          def lambda_handler(event, context):
+              # Placeholder - will be replaced with actual code
+              return {
+                  'statusCode': 200,
+                  'body': json.dumps({'message': 'Webhook received'})
+              }
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+
+  WebhookReceiverUrl:
+    Type: AWS::Lambda::Url
+    Properties:
+      TargetFunctionArn: !GetAtt WebhookReceiverFunction.Arn
+      AuthType: NONE
+      Cors:
+        AllowOrigins:
+          - '*'
+        AllowMethods:
+          - POST
+        MaxAge: 300
+
+  WebhookReceiverPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref WebhookReceiverFunction
+      Action: lambda:InvokeFunctionUrl
+      Principal: '*'
+      FunctionUrlAuthType: NONE
+
+  KinesisProcessorFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub 'calendly-kinesis-processor-${Environment}'
+      Runtime: python3.11
+      Handler: kinesis_processor.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 300
+      MemorySize: 1024
+      Environment:
+        Variables:
+          BRONZE_BUCKET: !Ref BronzeDataBucket
+          DDB_TABLE: !Ref PipelineStateDDB
+          ENVIRONMENT: !Ref Environment
+      Code:
+        ZipFile: |
+          import json
+          import os
+          
+          def lambda_handler(event, context):
+              # Placeholder - will be replaced with actual code
+              return {'statusCode': 200}
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+
+  KinesisEventSourceMapping:
+    Type: AWS::Lambda::EventSourceMapping
+    Properties:
+      EventSourceArn: !GetAtt CalendlyEventsStream.Arn
+      FunctionName: !GetAtt KinesisProcessorFunction.Arn
+      StartingPosition: LATEST
+      BatchSize: 100
+      MaximumBatchingWindowInSeconds: 10
+
+  SpendDataIngestionFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub 'calendly-spend-ingestion-${Environment}'
+      Runtime: python3.11
+      Handler: spend_ingestion.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 300
+      MemorySize: 512
+      Environment:
+        Variables:
+          BRONZE_BUCKET: !Ref BronzeDataBucket
+          DDB_TABLE: !Ref PipelineStateDDB
+          ENVIRONMENT: !Ref Environment
+      Code:
+        ZipFile: |
+          import json
+          import os
+          
+          def lambda_handler(event, context):
+              # Placeholder - will be replaced with actual code
+              return {'statusCode': 200}
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+
+  # ========================================
+  # EventBridge Rule for Daily Ingestion
+  # ========================================
+  
+  DailyIngestionRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub 'calendly-daily-ingestion-${Environment}'
+      Description: Trigger Step Function daily at 7 AM EST
+      ScheduleExpression: 'cron(0 12 * * ? *)'  # 7 AM EST = 12 PM UTC
+      State: ENABLED
+      Targets:
+        - Arn: !Ref PipelineOrchestrator
+          RoleArn: !GetAtt EventBridgeRole.Arn
+
+  EventBridgeRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: events.amazonaws.com
+            Action: 'sts:AssumeRole'
+      Policies:
+        - PolicyName: StartStepFunction
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: 'states:StartExecution'
+                Resource: !Ref PipelineOrchestrator
+
+  # ========================================
+  # Step Functions State Machine
+  # ========================================
+  
+  PipelineOrchestrator:
+    Type: AWS::StepFunctions::StateMachine
+    Properties:
+      StateMachineName: !Sub 'calendly-pipeline-orchestrator-${Environment}'
+      RoleArn: !GetAtt StepFunctionsRole.Arn
+      DefinitionString: !Sub |
+        {
+          "Comment": "Calendly Marketing Analytics Pipeline Orchestrator",
+          "StartAt": "IngestSpendData",
+          "States": {
+            "IngestSpendData": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::lambda:invoke",
+              "Parameters": {
+                "FunctionName": "${SpendDataIngestionFunction.Arn}",
+                "Payload": {
+                  "execution_date.$": "$$.Execution.StartTime"
+                }
+              },
+              "Retry": [
+                {
+                  "ErrorEquals": ["States.ALL"],
+                  "IntervalSeconds": 2,
+                  "MaxAttempts": 3,
+                  "BackoffRate": 2
+                }
+              ],
+              "Catch": [
+                {
+                  "ErrorEquals": ["States.ALL"],
+                  "Next": "NotifyFailure",
+                  "ResultPath": "$.error"
+                }
+              ],
+              "Next": "BronzeToSilverTransformation"
+            },
+            "BronzeToSilverTransformation": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::glue:startJobRun.sync",
+              "Parameters": {
+                "JobName": "calendly-bronze-to-silver"
+              },
+              "Retry": [
+                {
+                  "ErrorEquals": ["States.ALL"],
+                  "IntervalSeconds": 2,
+                  "MaxAttempts": 2,
+                  "BackoffRate": 2
+                }
+              ],
+              "Catch": [
+                {
+                  "ErrorEquals": ["States.ALL"],
+                  "Next": "NotifyFailure",
+                  "ResultPath": "$.error"
+                }
+              ],
+              "Next": "SilverToGoldTransformation"
+            },
+            "SilverToGoldTransformation": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::glue:startJobRun.sync",
+              "Parameters": {
+                "JobName": "calendly-silver-to-gold"
+              },
+              "Retry": [
+                {
+                  "ErrorEquals": ["States.ALL"],
+                  "IntervalSeconds": 2,
+                  "MaxAttempts": 2,
+                  "BackoffRate": 2
+                }
+              ],
+              "Catch": [
+                {
+                  "ErrorEquals": ["States.ALL"],
+                  "Next": "NotifyFailure",
+                  "ResultPath": "$.error"
+                }
+              ],
+              "Next": "NotifySuccess"
+            },
+            "NotifySuccess": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::sns:publish",
+              "Parameters": {
+                "TopicArn": "${PipelineNotificationTopic}",
+                "Subject": "Pipeline Success",
+                "Message": "Calendly pipeline completed successfully"
+              },
+              "End": true
+            },
+            "NotifyFailure": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::sns:publish",
+              "Parameters": {
+                "TopicArn": "${PipelineNotificationTopic}",
+                "Subject": "Pipeline Failure",
+                "Message.$": "$.error"
+              },
+              "End": true
+            }
+          }
+        }
+
+Outputs:
+  WebhookURL:
+    Description: Webhook URL for Calendly
+    Value: !GetAtt WebhookReceiverUrl.FunctionUrl
+    Export:
+      Name: !Sub '${AWS::StackName}-WebhookURL'
+
+  KinesisStreamName:
+    Description: Kinesis Stream Name
+    Value: !Ref CalendlyEventsStream
+    Export:
+      Name: !Sub '${AWS::StackName}-KinesisStream'
+
+  RawBucketName:
+    Description: Raw Data Bucket
+    Value: !Ref RawDataBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-RawBucket'
+
+  BronzeBucketName:
+    Description: Bronze Layer Bucket
+    Value: !Ref BronzeDataBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-BronzeBucket'
+
+  SilverBucketName:
+    Description: Silver Layer Bucket
+    Value: !Ref SilverDataBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-SilverBucket'
+
+  GoldBucketName:
+    Description: Gold Layer Bucket
+    Value: !Ref GoldDataBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-GoldBucket'
+
+  StateMachineArn:
+    Description: Step Functions State Machine ARN
+    Value: !Ref PipelineOrchestrator
+    Export:
+      Name: !Sub '${AWS::StackName}-StateMachine'
+
+  GlueDatabaseName:
+    Description: Glue Database Name
+    Value: !Ref GlueDatabase
+    Export:
+      Name: !Sub '${AWS::StackName}-GlueDB'

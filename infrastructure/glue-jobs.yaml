@@ -1,0 +1,152 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Calendly Analytics - Glue ETL Jobs'
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - staging
+      - prod
+
+  MainStackName:
+    Type: String
+    Default: calendly-main-stack
+    Description: Name of the main stack to import values from
+
+  GlueScriptsBucket:
+    Type: String
+    Description: S3 bucket containing Glue scripts
+
+Resources:
+  # ========================================
+  # Bronze to Silver Glue Job
+  # ========================================
+  
+  BronzeToSilverJob:
+    Type: AWS::Glue::Job
+    Properties:
+      Name: !Sub 'calendly-bronze-to-silver-${Environment}'
+      Role: !Sub 'calendly-glue-role-${Environment}'
+      Command:
+        Name: glueetl
+        ScriptLocation: !Sub 's3://${GlueScriptsBucket}/scripts/bronze_to_silver.py'
+        PythonVersion: '3'
+      DefaultArguments:
+        '--job-language': 'python'
+        '--job-bookmark-option': 'job-bookmark-enable'
+        '--enable-metrics': 'true'
+        '--enable-continuous-cloudwatch-log': 'true'
+        '--enable-spark-ui': 'true'
+        '--spark-event-logs-path': !Sub 's3://${GlueScriptsBucket}/spark-logs/'
+        '--TempDir': !Sub 's3://${GlueScriptsBucket}/temp/'
+        '--enable-glue-datacatalog': 'true'
+        '--datalake-formats': 'delta'
+        '--conf': 'spark.sql.extensions=io.delta.sql.DeltaSparkSessionExtension --conf spark.sql.catalog.spark_catalog=org.apache.spark.sql.delta.catalog.DeltaCatalog'
+        '--extra-py-files': 's3://aws-glue-studio-transforms-510798373988-prod-us-east-1/gs_common.py,s3://aws-glue-studio-transforms-510798373988-prod-us-east-1/gs_derived_column.py'
+        '--extra-jars': 's3://aws-glue-studio-transforms-510798373988-prod-us-east-1/delta-core_2.12-2.1.0.jar,s3://aws-glue-studio-transforms-510798373988-prod-us-east-1/delta-storage-2.1.0.jar'
+        '--bronze_bucket':
+          Fn::ImportValue: !Sub '${MainStackName}-BronzeBucket'
+        '--silver_bucket':
+          Fn::ImportValue: !Sub '${MainStackName}-SilverBucket'
+        '--database_name':
+          Fn::ImportValue: !Sub '${MainStackName}-GlueDB'
+      ExecutionProperty:
+        MaxConcurrentRuns: 1
+      MaxRetries: 2
+      Timeout: 60
+      GlueVersion: '4.0'
+      NumberOfWorkers: 5
+      WorkerType: G.1X
+      Tags:
+        Environment: !Ref Environment
+        Layer: Silver
+
+  # ========================================
+  # Silver to Gold Glue Job
+  # ========================================
+  
+  SilverToGoldJob:
+    Type: AWS::Glue::Job
+    Properties:
+      Name: !Sub 'calendly-silver-to-gold-${Environment}'
+      Role: !Sub 'calendly-glue-role-${Environment}'
+      Command:
+        Name: glueetl
+        ScriptLocation: !Sub 's3://${GlueScriptsBucket}/scripts/silver_to_gold.py'
+        PythonVersion: '3'
+      DefaultArguments:
+        '--job-language': 'python'
+        '--job-bookmark-option': 'job-bookmark-enable'
+        '--enable-metrics': 'true'
+        '--enable-continuous-cloudwatch-log': 'true'
+        '--enable-spark-ui': 'true'
+        '--spark-event-logs-path': !Sub 's3://${GlueScriptsBucket}/spark-logs/'
+        '--TempDir': !Sub 's3://${GlueScriptsBucket}/temp/'
+        '--enable-glue-datacatalog': 'true'
+        '--datalake-formats': 'delta'
+        '--conf': 'spark.sql.extensions=io.delta.sql.DeltaSparkSessionExtension --conf spark.sql.catalog.spark_catalog=org.apache.spark.sql.delta.catalog.DeltaCatalog'
+        '--extra-py-files': 's3://aws-glue-studio-transforms-510798373988-prod-us-east-1/gs_common.py,s3://aws-glue-studio-transforms-510798373988-prod-us-east-1/gs_derived_column.py'
+        '--extra-jars': 's3://aws-glue-studio-transforms-510798373988-prod-us-east-1/delta-core_2.12-2.1.0.jar,s3://aws-glue-studio-transforms-510798373988-prod-us-east-1/delta-storage-2.1.0.jar'
+        '--silver_bucket':
+          Fn::ImportValue: !Sub '${MainStackName}-SilverBucket'
+        '--gold_bucket':
+          Fn::ImportValue: !Sub '${MainStackName}-GoldBucket'
+        '--database_name':
+          Fn::ImportValue: !Sub '${MainStackName}-GlueDB'
+      ExecutionProperty:
+        MaxConcurrentRuns: 1
+      MaxRetries: 2
+      Timeout: 60
+      GlueVersion: '4.0'
+      NumberOfWorkers: 5
+      WorkerType: G.1X
+      Tags:
+        Environment: !Ref Environment
+        Layer: Gold
+
+  # ========================================
+  # Glue Crawler for Gold Layer
+  # ========================================
+  
+  GoldLayerCrawler:
+    Type: AWS::Glue::Crawler
+    Properties:
+      Name: !Sub 'calendly-gold-crawler-${Environment}'
+      Role: !Sub 'calendly-glue-role-${Environment}'
+      DatabaseName:
+        Fn::ImportValue: !Sub '${MainStackName}-GlueDB'
+      Targets:
+        S3Targets:
+          - Path:
+              Fn::Sub:
+                - 's3://${Bucket}/metrics/'
+                - Bucket:
+                    Fn::ImportValue: !Sub '${MainStackName}-GoldBucket'
+      SchemaChangePolicy:
+        UpdateBehavior: UPDATE_IN_DATABASE
+        DeleteBehavior: LOG
+      Schedule:
+        ScheduleExpression: 'cron(0 13 * * ? *)'  # Run after daily pipeline
+      Tags:
+        Environment: !Ref Environment
+
+Outputs:
+  BronzeToSilverJobName:
+    Description: Bronze to Silver Glue Job Name
+    Value: !Ref BronzeToSilverJob
+    Export:
+      Name: !Sub '${AWS::StackName}-BronzeToSilverJob'
+
+  SilverToGoldJobName:
+    Description: Silver to Gold Glue Job Name
+    Value: !Ref SilverToGoldJob
+    Export:
+      Name: !Sub '${AWS::StackName}-SilverToGoldJob'
+
+  CrawlerName:
+    Description: Gold Layer Crawler Name
+    Value: !Ref GoldLayerCrawler
+    Export:
+      Name: !Sub '${AWS::StackName}-GoldCrawler'
