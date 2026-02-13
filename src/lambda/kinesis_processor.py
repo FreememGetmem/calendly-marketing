@@ -2,7 +2,6 @@
 Kinesis Processor Lambda Function
 Processes events from Kinesis and writes to Bronze layer in Delta format
 """
-
 import json
 import os
 import boto3
