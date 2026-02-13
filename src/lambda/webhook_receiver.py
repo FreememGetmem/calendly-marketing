@@ -35,17 +35,17 @@ ALLOWED_EVENT_TYPES = {
 def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """
     Main Lambda handler for Calendly webhooks
-    
+   
     Args:
         event: Lambda event containing webhook payload
         context: Lambda context
-        
+       
     Returns:
         API Gateway response
     """
     try:
         logger.info(f"Received event: {json.dumps(event)}")
-        
+       
         # Parse the webhook payload
         if 'body' in event:
             # API Gateway format
@@ -53,14 +53,14 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         else:
             # Direct invocation
             body = event
-        
+       
         # Extract webhook data
         webhook_event = body.get('event')
         payload = body.get('payload', {})
         created_at = body.get('created_at')
-        
+       
         logger.info(f"Processing webhook event: {webhook_event}")
-        
+       
         # Validate event type
         if webhook_event != 'invitee.created':
             logger.info(f"Ignoring non-invitee.created event: {webhook_event}")
@@ -68,11 +68,11 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 'statusCode': 200,
                 'body': json.dumps({'message': 'Event type ignored'})
             }
-        
+       
         # Extract scheduled event details
         scheduled_event = payload.get('scheduled_event', {})
         event_type_url = scheduled_event.get('event_type')
-        
+       
         # Check if event type is in our allowed list
         if event_type_url not in ALLOWED_EVENT_TYPES:
             logger.info(f"Event type not in allowed list: {event_type_url}")
@@ -80,10 +80,10 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 'statusCode': 200,
                 'body': json.dumps({'message': 'Event type not tracked'})
             }
-        
+       
         # Get marketing channel
         marketing_channel = ALLOWED_EVENT_TYPES[event_type_url]
-        
+       
         # Enrich the webhook data
         enriched_data = {
             'webhook_event': webhook_event,
@@ -114,7 +114,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             },
             'tracking_data': payload.get('tracking', {})
         }
-        
+       
         # Store raw webhook in S3 for audit/replay
         s3_key = f"webhooks/{webhook_event}/{datetime.utcnow().strftime('%Y/%m/%d')}/{context.request_id}.json"
         s3_client.put_object(
@@ -124,7 +124,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             ContentType='application/json'
         )
         logger.info(f"Stored raw webhook to S3: s3://{RAW_BUCKET}/{s3_key}")
-        
+       
         # Send to Kinesis Data Stream
         partition_key = marketing_channel
         kinesis_response = kinesis_client.put_record(
@@ -132,10 +132,10 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             Data=json.dumps(enriched_data),
             PartitionKey=partition_key
         )
-        
+       
         logger.info(f"Sent to Kinesis: ShardId={kinesis_response['ShardId']}, "
                    f"SequenceNumber={kinesis_response['SequenceNumber']}")
-        
+       
         return {
             'statusCode': 200,
             'headers': {
@@ -148,7 +148,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 'marketing_channel': marketing_channel
             })
         }
-        
+       
     except Exception as e:
         logger.error(f"Error processing webhook: {str(e)}", exc_info=True)
         return {
@@ -166,10 +166,10 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 def validate_webhook_signature(event: Dict[str, Any]) -> bool:
     """
     Validate Calendly webhook signature (if configured)
-    
+   
     Args:
         event: Lambda event
-        
+       
     Returns:
         True if valid, False otherwise
     """
