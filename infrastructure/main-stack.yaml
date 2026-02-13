@@ -10,12 +10,12 @@ Parameters:
       - staging
       - prod
     Description: Environment name
-  
+
   OrganizationURL:
     Type: String
     Default: 'https://api.calendly.com/organizations/8910725e-6409-44dc-ba57-ead6dd48b052'
     Description: Calendly Organization URL
-  
+
   GlueDBName:
     Type: String
     Default: calendly_analytics_db
@@ -25,7 +25,7 @@ Resources:
   # ========================================
   # S3 Buckets (Data Lake Layers)
   # ========================================
-  
+
   RawDataBucket:
     Type: AWS::S3::Bucket
     Properties:
@@ -118,7 +118,7 @@ Resources:
   # ========================================
   # Kinesis Data Stream
   # ========================================
-  
+
   CalendlyEventsStream:
     Type: AWS::Kinesis::Stream
     Properties:
@@ -135,7 +135,7 @@ Resources:
   # ========================================
   # DynamoDB for State Management
   # ========================================
-  
+
   PipelineStateDDB:
     Type: AWS::DynamoDB::Table
     Properties:
@@ -164,7 +164,7 @@ Resources:
   # ========================================
   # IAM Roles
   # ========================================
-  
+
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
@@ -304,7 +304,7 @@ Resources:
   # ========================================
   # SNS Topic for Notifications
   # ========================================
-  
+
   PipelineNotificationTopic:
     Type: AWS::SNS::Topic
     Properties:
@@ -318,7 +318,7 @@ Resources:
   # ========================================
   # Glue Database & Crawler
   # ========================================
-  
+
   GlueDatabase:
     Type: AWS::Glue::Database
     Properties:
@@ -330,7 +330,7 @@ Resources:
   # ========================================
   # Lambda Functions
   # ========================================
-  
+
   WebhookReceiverFunction:
     Type: AWS::Lambda::Function
     Properties:
@@ -351,7 +351,7 @@ Resources:
           import os
           import boto3
           from datetime import datetime
-          
+
           def lambda_handler(event, context):
               # Placeholder - will be replaced with actual code
               return {
@@ -400,7 +400,7 @@ Resources:
         ZipFile: |
           import json
           import os
-          
+
           def lambda_handler(event, context):
               # Placeholder - will be replaced with actual code
               return {'statusCode': 200}
@@ -435,7 +435,7 @@ Resources:
         ZipFile: |
           import json
           import os
-          
+
           def lambda_handler(event, context):
               # Placeholder - will be replaced with actual code
               return {'statusCode': 200}
@@ -446,7 +446,7 @@ Resources:
   # ========================================
   # EventBridge Rule for Daily Ingestion
   # ========================================
-  
+
   DailyIngestionRule:
     Type: AWS::Events::Rule
     Properties:
@@ -455,7 +455,8 @@ Resources:
       ScheduleExpression: 'cron(0 12 * * ? *)'  # 7 AM EST = 12 PM UTC
       State: ENABLED
       Targets:
-        - Arn: !Ref PipelineOrchestrator
+        - Id: DailyPipelineTrigger
+          Arn: !Ref PipelineOrchestrator
           RoleArn: !GetAtt EventBridgeRole.Arn
 
   EventBridgeRole:
@@ -480,7 +481,7 @@ Resources:
   # ========================================
   # Step Functions State Machine
   # ========================================
-  
+
   PipelineOrchestrator:
     Type: AWS::StepFunctions::StateMachine
     Properties:
