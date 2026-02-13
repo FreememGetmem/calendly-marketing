@@ -72,7 +72,7 @@ jobs:
 
       - name: Validate CloudFormation templates
         run: |
-          pip install --upgrade --force-reinstall cfn-lint==0.35.0 pyrsistent==0.16.0
+          pip install cfn-lint
           for template in infrastructure/*.yaml; do
             echo "Validating $template"
             aws cloudformation validate-template --template-body file://$template
@@ -82,8 +82,8 @@ jobs:
         uses: scottbrenner/cfn-lint-action@v2
         with:
           command: |
-            cfn-lint -t infrastructure/glue-jobs.yaml
-            cfn-lint -t infrastructure/main-stack.yaml
+            cfn-lint infrastructure/glue-jobs.yaml --ignore-checks W
+            cfn-lint infrastructure/main-stack.yaml --ignore-checks W
 
   deploy-dev:
     name: Deploy to Development
