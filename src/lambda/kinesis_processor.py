@@ -30,53 +30,43 @@ state_table = dynamodb.Table(DDB_TABLE_NAME)
 
 def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """
-    Process Kinesis records and write to Bronze layer
-   
+    Process Kinesis records and write to Bronze layer  
     Args:
         event: Kinesis event with records
-        context: Lambda context
-       
+        context: Lambda context       
     Returns:
         Processing results
     """
     try:
         logger.info(f"Processing {len(event['Records'])} Kinesis records")
-  
         processed_records = []
-        failed_records = []
-      
+        failed_records = []      
         for record in event['Records']:
             try:
                 # Decode Kinesis data
-                payload = json.loads(base64.b64decode(record['kinesis']['data']))
-               
+                payload = json.loads(base64.b64decode(record['kinesis']['data']))               
                 # Process the record
                 process_calendly_event(payload, record)
-                processed_records.append(record['kinesis']['sequenceNumber'])
-               
+                processed_records.append(record['kinesis']['sequenceNumber'])               
             except Exception as e:
                 logger.error(f"Error processing record {record['kinesis']['sequenceNumber']}: {str(e)}")
                 failed_records.append({
                     'sequence_number': record['kinesis']['sequenceNumber'],
                     'error': str(e)
-                })
-       
+                })       
         # Update DynamoDB state
         update_pipeline_state(
             pipeline_id='kinesis_processor',
             records_processed=len(processed_records),
             records_failed=len(failed_records)
-        )
-       
-        logger.info(f"Processed: {len(processed_records)}, Failed: {len(failed_records)}")
-       
+        )       
+        logger.info(f"Processed: {len(processed_records)}, Failed: {len(failed_records)}")       
         return {
             'statusCode': 200,
             'processed': len(processed_records),
             'failed': len(failed_records),
             'failed_records': failed_records
-        }
-       
+        }       
     except Exception as e:
         logger.error(f"Error in lambda_handler: {str(e)}", exc_info=True)
         raise
@@ -84,8 +74,7 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
 def process_calendly_event(payload: Dict[str, Any], kinesis_record: Dict[str, Any]) -> None:
     """
-    Process a single Calendly event and write to Bronze layer
-   
+    Process a single Calendly event and write to Bronze layer   
     Args:
         payload: Enriched webhook payload
         kinesis_record: Original Kinesis record
@@ -153,36 +142,31 @@ def process_calendly_event(payload: Dict[str, Any], kinesis_record: Dict[str, An
         'booking_day': extract_day(scheduled_event.get('start_time')),
         'booking_hour': extract_hour(scheduled_event.get('start_time')),
         'booking_day_of_week': extract_day_of_week(scheduled_event.get('start_time'))
-    }
-   
+    }   
     # Write to Bronze layer (partitioned by date and channel)
     write_to_bronze_layer(bronze_record, marketing_channel)
 
 
 def write_to_bronze_layer(record: Dict[str, Any], marketing_channel: str) -> None:
     """
-    Write record to Bronze layer in S3 (Delta Lake format will be handled by Glue)
-   
+    Write record to Bronze layer in S3 (Delta Lake format will be handled by Glue)   
     Args:
         record: Flattened bronze record
         marketing_channel: Marketing channel for partitioning
     """
-    booking_date = record.get('booking_date', datetime.utcnow().strftime('%Y-%m-%d'))
-   
+    booking_date = record.get('booking_date', datetime.utcnow().strftime('%Y-%m-%d'))   
     # S3 key with partitioning
     s3_key = (f"calendly_events/"
               f"channel={marketing_channel}/"
               f"date={booking_date}/"
-              f"{record['event_id']}.json")
-   
+              f"{record['event_id']}.json")   
     # Write to S3
     s3_client.put_object(
         Bucket=BRONZE_BUCKET,
         Key=s3_key,
         Body=json.dumps(record, indent=2),
         ContentType='application/json'
-    )
-   
+    )   
     logger.info(f"Written to Bronze: s3://{BRONZE_BUCKET}/{s3_key}")
 
 
@@ -276,15 +260,13 @@ def extract_day_of_week(timestamp_str: str) -> str:
 
 def update_pipeline_state(pipeline_id: str, records_processed: int, records_failed: int) -> None:
     """
-    Update pipeline execution state in DynamoDB
-   
+    Update pipeline execution state in DynamoDB   
     Args:
         pipeline_id: Pipeline identifier
         records_processed: Count of successfully processed records
         records_failed: Count of failed records
     """
-    execution_date = datetime.utcnow().strftime('%Y-%m-%d')
-   
+    execution_date = datetime.utcnow().strftime('%Y-%m-%d')   
     try:
         state_table.put_item(
             Item={
