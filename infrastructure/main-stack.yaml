@@ -328,6 +328,75 @@ Resources:
         Description: Calendly Analytics Database
 
   # ========================================
+  # API Gateway for Webhook Receiver
+  # ========================================
+
+  WebhookApi:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: !Sub 'calendly-webhook-api-${Environment}'
+      Description: API Gateway for Calendly webhook receiver
+      ProtocolType: HTTP
+      CorsConfiguration:
+        AllowOrigins:
+          - '*'
+        AllowMethods:
+          - POST
+          - GET
+        AllowHeaders:
+          - Content-Type
+          - X-Amz-Date
+          - Authorization
+          - X-Api-Key
+        MaxAge: 300
+
+  WebhookApiStage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      ApiId: !Ref WebhookApi
+      StageName: !Ref Environment
+      Description: !Sub 'Calendly webhook API - ${Environment}'
+      AutoDeploy: true
+      AccessLogSettings:
+        DestinationArn: !GetAtt WebhookApiLogGroup.Arn
+        Format: '$context.requestId $context.error.message $context.error.messageString'
+      DefaultRouteSettings:
+        ThrottlingBurstLimit: 100
+        ThrottlingRateLimit: 50
+
+  WebhookApiLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/apigateway/calendly-webhook-${Environment}'
+      RetentionInDays: 30
+
+  WebhookApiIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref WebhookApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !Sub 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${WebhookReceiverFunction.Arn}/invocations'
+      IntegrationMethod: POST
+      PayloadFormatVersion: '2.0'
+      TimeoutInMillis: 29000
+
+  WebhookApiRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref WebhookApi
+      RouteKey: 'POST /webhook'
+      Target: !Sub 'integrations/${WebhookApiIntegration}'
+      AuthorizationType: NONE
+
+  WebhookApiPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref WebhookReceiverFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${WebhookApi}/*/*/webhook'
+
+  # ========================================
   # Lambda Functions
   # ========================================
 
@@ -346,41 +415,11 @@ Resources:
           RAW_BUCKET: !Ref RawDataBucket
           ENVIRONMENT: !Ref Environment
       Code:
-        ZipFile: |
-          import json
-          import os
-          import boto3
-          from datetime import datetime
-
-          def lambda_handler(event, context):
-              # Placeholder - will be replaced with actual code
-              return {
-                  'statusCode': 200,
-                  'body': json.dumps({'message': 'Webhook received'})
-              }
+        S3Bucket: !Ref RawDataBucket
+        S3Key: lambda/webhook_receiver.zip
       Tags:
         - Key: Environment
           Value: !Ref Environment
-
-  WebhookReceiverUrl:
-    Type: AWS::Lambda::Url
-    Properties:
-      TargetFunctionArn: !GetAtt WebhookReceiverFunction.Arn
-      AuthType: NONE
-      Cors:
-        AllowOrigins:
-          - '*'
-        AllowMethods:
-          - POST
-        MaxAge: 300
-
-  WebhookReceiverPermission:
-    Type: AWS::Lambda::Permission
-    Properties:
-      FunctionName: !Ref WebhookReceiverFunction
-      Action: lambda:InvokeFunctionUrl
-      Principal: '*'
-      FunctionUrlAuthType: NONE
 
   KinesisProcessorFunction:
     Type: AWS::Lambda::Function
@@ -397,19 +436,15 @@ Resources:
           DDB_TABLE: !Ref PipelineStateDDB
           ENVIRONMENT: !Ref Environment
       Code:
-        ZipFile: |
-          import json
-          import os
-
-          def lambda_handler(event, context):
-              # Placeholder - will be replaced with actual code
-              return {'statusCode': 200}
+        S3Bucket: !Ref BronzeDataBucket
+        s3Key: lambda/kinesis_processor.zip
       Tags:
         - Key: Environment
           Value: !Ref Environment
 
   KinesisEventSourceMapping:
     Type: AWS::Lambda::EventSourceMapping
+    DependsOn: KinesisProcessorFunction
     Properties:
       EventSourceArn: !GetAtt CalendlyEventsStream.Arn
       FunctionName: !GetAtt KinesisProcessorFunction.Arn
@@ -432,13 +467,8 @@ Resources:
           DDB_TABLE: !Ref PipelineStateDDB
           ENVIRONMENT: !Ref Environment
       Code:
-        ZipFile: |
-          import json
-          import os
-
-          def lambda_handler(event, context):
-              # Placeholder - will be replaced with actual code
-              return {'statusCode': 200}
+        S3Bucket: !Ref BronzeDataBucket
+        S3Key: lambda/spend_ingestion.zip
       Tags:
         - Key: Environment
           Value: !Ref Environment
@@ -589,10 +619,16 @@ Resources:
 
 Outputs:
   WebhookURL:
-    Description: Webhook URL for Calendly
-    Value: !GetAtt WebhookReceiverUrl.FunctionUrl
+    Description: API Gateway URL for Calendly webhooks
+    Value: !Sub 'https://${WebhookApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/webhook'
     Export:
       Name: !Sub '${AWS::StackName}-WebhookURL'
+
+  ApiGatewayId:
+    Description: API Gateway ID
+    Value: !Ref WebhookApi
+    Export:
+      Name: !Sub '${AWS::StackName}-ApiGatewayId'
 
   KinesisStreamName:
     Description: Kinesis Stream Name

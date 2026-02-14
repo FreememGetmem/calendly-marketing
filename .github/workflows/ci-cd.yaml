@@ -106,16 +106,21 @@ jobs:
       - name: Package Lambda functions
         run: |
           cd src/lambda
-          pip install -r requirements.txt -t package/
-          cd package
-          zip -r ../lambda-package.zip .
+          pip install -r requirements.txt
           cd ..
-          zip -g lambda-package.zip *.py
+          zip -r spend_ingestion.zip .
+          zip -r webhook_receiver.zip .
+          zip -r kinesis_processor.zip .
       # -------------------------------------
       # Deleting previous stack and checking
       # -------------------------------------
       - name: Deleting previous stack and checking
         run: |
+          aws cloudformation delete-stack --stack-name calendly-main-stack-prod --region us-west-1
+          aws cloudformation wait stack-delete-complete --stack-name calendly-main-stack-prod --region us-west-1
+
+          aws cloudformation delete-stack --stack-name calendly-glue-jobs-prod --region us-west-1
+          aws cloudformation wait stack-delete-complete --stack-name calendly-glue-jobs-prod --region us-west-1
 
           aws s3api head-bucket --bucket ${{ secrets.S3_BUCKET }} 2>/dev/null || \
           aws s3api create-bucket \
@@ -125,7 +130,7 @@ jobs:
 
       - name: Upload Lambda package to S3
         run: |
-          aws s3 cp src/lambda/lambda-package.zip s3://${{ secrets.S3_BUCKET }}/lambda/
+          aws s3 cp src/lambda/*.zip s3://${{ secrets.S3_BUCKET }}/lambda/
 
       - name: Upload Glue scripts to S3
         run: |
