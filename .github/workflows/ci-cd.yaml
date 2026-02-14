@@ -135,7 +135,9 @@ jobs:
 
       - name: Upload Lambda package to S3
         run: |
-          aws s3 cp src/lambda/*.zip s3://${{ secrets.S3_BUCKET }}/lambda/
+          aws s3 cp src/lambda/kinesis_processor.zip s3://${{ secrets.S3_BUCKET }}/lambda/kinesis_processor.zip
+          aws s3 cp src/lambda2/spend_ingestion.zip s3://${{ secrets.S3_BUCKET }}/lambda2/spend_ingestion.zip
+          aws s3 cp src/lambda3/webhook_receiver.zip s3://${{ secrets.S3_BUCKET }}/lambda3/webhook_receiver.zip
 
       - name: Upload Glue scripts to S3
         run: |
