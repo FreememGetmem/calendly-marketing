@@ -416,7 +416,7 @@ Resources:
           ENVIRONMENT: !Ref Environment
       Code:
         S3Bucket: !Ref RawDataBucket
-        S3Key: lambda/webhook_receiver.zip
+        S3Key: lambda3/webhook_receiver.zip
       Tags:
         - Key: Environment
           Value: !Ref Environment
@@ -437,7 +437,7 @@ Resources:
           ENVIRONMENT: !Ref Environment
       Code:
         S3Bucket: !Ref BronzeDataBucket
-        s3Key: lambda3/kinesis_processor.zip
+        s3Key: lambda/kinesis_processor.zip
       Tags:
         - Key: Environment
           Value: !Ref Environment
