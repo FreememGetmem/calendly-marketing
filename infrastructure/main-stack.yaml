@@ -437,7 +437,7 @@ Resources:
           ENVIRONMENT: !Ref Environment
       Code:
         S3Bucket: !Ref BronzeDataBucket
-        s3Key: lambda/kinesis_processor.zip
+        s3Key: lambda3/kinesis_processor.zip
       Tags:
         - Key: Environment
           Value: !Ref Environment
@@ -468,7 +468,7 @@ Resources:
           ENVIRONMENT: !Ref Environment
       Code:
         S3Bucket: !Ref BronzeDataBucket
-        S3Key: lambda/spend_ingestion.zip
+        S3Key: lambda2/spend_ingestion.zip
       Tags:
         - Key: Environment
           Value: !Ref Environment
