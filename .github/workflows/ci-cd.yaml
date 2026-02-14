@@ -119,7 +119,7 @@ jobs:
       # -------------------------------------
       # Deleting previous stack and checking
       # -------------------------------------
-      - name: Deleting previous stack and checking
+      - name: Deleting previous stack, checking and copying files
         run: |
           aws cloudformation delete-stack --stack-name calendly-main-stack-prod --region us-west-1
           aws cloudformation wait stack-delete-complete --stack-name calendly-main-stack-prod --region us-west-1
@@ -148,7 +148,7 @@ jobs:
           aws cloudformation deploy \
             --template-file infrastructure/main-stack.yaml \
             --stack-name calendly-main-stack-prod \
-            --parameter-overrides Environment=prod \
+            --parameter-overrides LeadDataBucketName=calendly-artifacts-prod-635374934580 \
             --capabilities CAPABILITY_NAMED_IAM \
             --no-fail-on-empty-changeset
 

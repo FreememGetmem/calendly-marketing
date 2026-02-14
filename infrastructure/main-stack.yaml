@@ -11,6 +11,9 @@ Parameters:
       - prod
     Description: Environment name
 
+  LeadDataBucketName:
+    Type: String
+
   OrganizationURL:
     Type: String
     Default: 'https://api.calendly.com/organizations/8910725e-6409-44dc-ba57-ead6dd48b052'
@@ -415,7 +418,7 @@ Resources:
           RAW_BUCKET: !Ref RawDataBucket
           ENVIRONMENT: !Ref Environment
       Code:
-        S3Bucket: !Ref RawDataBucket
+        S3Bucket: !Ref LeadDataBucketName
         S3Key: lambda3/webhook_receiver.zip
       Tags:
         - Key: Environment
@@ -436,7 +439,7 @@ Resources:
           DDB_TABLE: !Ref PipelineStateDDB
           ENVIRONMENT: !Ref Environment
       Code:
-        S3Bucket: !Ref BronzeDataBucket
+        S3Bucket: !Ref LeadDataBucketName
         S3Key: lambda/kinesis_processor.zip
       Tags:
         - Key: Environment
@@ -467,7 +470,7 @@ Resources:
           DDB_TABLE: !Ref PipelineStateDDB
           ENVIRONMENT: !Ref Environment
       Code:
-        S3Bucket: !Ref BronzeDataBucket
+        S3Bucket: !Ref LeadDataBucketName
         S3Key: lambda2/spend_ingestion.zip
       Tags:
         - Key: Environment
