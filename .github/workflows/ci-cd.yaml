@@ -191,10 +191,52 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Deploy to Streamlit Cloud
-        # env: |
-          # STREAMLIT_TOKEN: {{ secrets.STREAMLIT_TOKEN }}
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build, tag, and push dashboard image
+        env:
+          ECR_REGISTRY: $(aws sts get-caller-identity --query Account --output text).dkr.ecr.us-east-1.amazonaws.com
+          ECR_REPOSITORY: calendly-dashboard-prod
+          IMAGE_TAG: streamlit-webhook
         run: |
-          # Deploy dashboard to Streamlit Cloud
-          # This assumes you have Streamlit Cloud configured
-          echo "Dashboard deployment configured separately in Streamlit Cloud"
+          cd src/dashboard
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+          docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:latest
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+
+      - name: Deploy dashboard stack
+        run: |
+          aws cloudformation deploy \
+            --template-file infrastructure/dashboard-stack.yaml \
+            --stack-name calendly-dashboard-stack-prod \
+            --parameter-overrides \
+              Environment=prod \
+              MainStackName=calendly-main-stack-prod \
+            --capabilities CAPABILITY_NAMED_IAM
+
+      - name: Update ECS service
+        run: |
+          CLUSTER=$(aws cloudformation describe-stacks \
+            --stack-name calendly-dashboard-stack-prod \
+            --query "Stacks[0].Outputs[?OutputKey=='ECSClusterName'].OutputValue" \
+            --output text)
+
+          SERVICE=$(aws cloudformation describe-stacks \
+            --stack-name calendly-dashboard-stack-prod \
+            --query "Stacks[0].Outputs[?OutputKey=='ECSServiceName'].OutputValue" \
+            --output text)
+
+          aws ecs update-service \
+            --cluster $CLUSTER \
+            --service $SERVICE \
+            --force-new-deployment
