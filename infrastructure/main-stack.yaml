@@ -263,6 +263,8 @@ Resources:
                   - !Sub '${SilverDataBucket.Arn}/*'
                   - !GetAtt GoldDataBucket.Arn
                   - !Sub '${GoldDataBucket.Arn}/*'
+                  - 'arn:aws:s3:::calendly-artifacts-*'
+                  - 'arn:aws:s3:::calendly-artifacts-*/*'
 
   StepFunctionsRole:
     Type: AWS::IAM::Role
@@ -674,3 +676,9 @@ Outputs:
     Value: !Ref GlueDatabase
     Export:
       Name: !Sub '${AWS::StackName}-GlueDB'
+
+  GlueExecutionRoleArn:
+    Description: Glue Execution Role ARN
+    Value: !GetAtt GlueExecutionRole.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-GlueRoleArn'

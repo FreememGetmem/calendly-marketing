@@ -23,12 +23,13 @@ Resources:
   # ========================================
   # Bronze to Silver Glue Job
   # ========================================
-  
+
   BronzeToSilverJob:
     Type: AWS::Glue::Job
     Properties:
       Name: !Sub 'calendly-bronze-to-silver-${Environment}'
-      Role: !Sub 'calendly-glue-role-${Environment}'
+      Role:
+        Fn::ImportValue: !Sub '${MainStackName}-GlueRoleArn'
       Command:
         Name: glueetl
         ScriptLocation: !Sub 's3://${GlueScriptsBucket}/scripts/bronze_to_silver.py'
@@ -66,12 +67,13 @@ Resources:
   # ========================================
   # Silver to Gold Glue Job
   # ========================================
-  
+
   SilverToGoldJob:
     Type: AWS::Glue::Job
     Properties:
       Name: !Sub 'calendly-silver-to-gold-${Environment}'
-      Role: !Sub 'calendly-glue-role-${Environment}'
+      Role:
+        Fn::ImportValue: !Sub '${MainStackName}-GlueRoleArn'
       Command:
         Name: glueetl
         ScriptLocation: !Sub 's3://${GlueScriptsBucket}/scripts/silver_to_gold.py'
@@ -109,12 +111,13 @@ Resources:
   # ========================================
   # Glue Crawler for Gold Layer
   # ========================================
-  
+
   GoldLayerCrawler:
     Type: AWS::Glue::Crawler
     Properties:
       Name: !Sub 'calendly-gold-crawler-${Environment}'
-      Role: !Sub 'calendly-glue-role-${Environment}'
+      Role:
+        Fn::ImportValue: !Sub '${MainStackName}-GlueRoleArn'
       DatabaseName:
         Fn::ImportValue: !Sub '${MainStackName}-GlueDB'
       Targets:
