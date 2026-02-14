@@ -4,10 +4,8 @@ Description: 'Calendly Marketing Analytics Pipeline - Main Stack (Lambda Archite
 Parameters:
   Environment:
     Type: String
-    Default: dev
+    Default: prod
     AllowedValues:
-      - dev
-      - staging
       - prod
     Description: Environment name
 
