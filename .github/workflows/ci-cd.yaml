@@ -167,19 +167,19 @@ jobs:
       - name: Update Lambda functions
         run: |
           aws lambda update-function-code \
-            --function-name calendly-webhook-receiver-prod \
-            --s3-bucket ${{ secrets.S3_BUCKET }} \
-            --s3-key lambda/lambda-package.zip
-
-          aws lambda update-function-code \
             --function-name calendly-kinesis-processor-prod \
             --s3-bucket ${{ secrets.S3_BUCKET }} \
-            --s3-key lambda/lambda-package.zip
+            --s3-key lambda/kinesis_processor.zip
 
           aws lambda update-function-code \
             --function-name calendly-spend-ingestion-prod \
             --s3-bucket ${{ secrets.S3_BUCKET }} \
-            --s3-key lambda/lambda-package.zip
+            --s3-key lambda2/spend_ingestion.zip
+
+          aws lambda update-function-code \
+            --function-name calendly-webhook-receiver-prod \
+            --s3-bucket ${{ secrets.S3_BUCKET }} \
+            --s3-key lambda3/webhook_receiver.zip
 
   deploy-dashboard:
     name: Deploy Streamlit Dashboard
