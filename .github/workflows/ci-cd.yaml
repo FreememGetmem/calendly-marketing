@@ -104,7 +104,7 @@ jobs:
 
       - name: Package Lambda functions
         run: |
-          pip install -r requirements.txt
+          pip install -r src/requirements.txt
 
           cd src/lambda
           zip -r kinesis_processor.zip .
