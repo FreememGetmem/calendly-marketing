@@ -105,12 +105,18 @@ jobs:
 
       - name: Package Lambda functions
         run: |
-          cd src/lambda
           pip install -r requirements.txt
-          cd ..
-          zip -r spend_ingestion.zip .
-          zip -r webhook_receiver.zip .
+
+          cd src/lambda
           zip -r kinesis_processor.zip .
+          cd ..
+          cd lambda2
+          zip -r spend_ingestion.zip .
+          cd ..
+          cd lambda3
+          zip -r webhook_receiver.zip .
+          cd ..
+
       # -------------------------------------
       # Deleting previous stack and checking
       # -------------------------------------
