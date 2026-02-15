@@ -204,7 +204,7 @@ jobs:
 
       - name: Build, tag, and push dashboard image
         env:
-          ECR_REGISTRY: echo "$(aws sts get-caller-identity Account --output text).dkr.ecr.us-east-1.amazonaws.com"
+          ECR_REGISTRY: $(aws sts get-caller-identity Account --output text).dkr.ecr.us-east-1.amazonaws.com
           ECR_REPOSITORY: calendly-dashboard-prod
           IMAGE_TAG: streamlit-webhook
         run: |
