@@ -4,18 +4,16 @@ Description: 'Calendly Analytics - Streamlit Dashboard on ECS Fargate'
 Parameters:
   Environment:
     Type: String
-    Default: dev
+    Default: prod
     AllowedValues:
-      - dev
-      - staging
       - prod
     Description: Environment name
-  
+
   MainStackName:
     Type: String
     Default: calendly-main-stack
     Description: Name of the main stack to import values from
-  
+
   DashboardImage:
     Type: String
     Default: 'public.ecr.aws/docker/library/python:3.11-slim'
@@ -25,7 +23,7 @@ Resources:
   # ========================================
   # VPC and Networking
   # ========================================
-  
+
   DashboardVPC:
     Type: AWS::EC2::VPC
     Properties:
@@ -104,7 +102,7 @@ Resources:
   # ========================================
   # Security Groups
   # ========================================
-  
+
   ALBSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -153,7 +151,7 @@ Resources:
   # ========================================
   # Application Load Balancer
   # ========================================
-  
+
   ApplicationLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
@@ -205,7 +203,7 @@ Resources:
   # ========================================
   # ECR Repository
   # ========================================
-  
+
   DashboardRepository:
     Type: AWS::ECR::Repository
     Properties:
@@ -237,7 +235,7 @@ Resources:
   # ========================================
   # ECS Cluster
   # ========================================
-  
+
   ECSCluster:
     Type: AWS::ECS::Cluster
     Properties:
@@ -262,7 +260,7 @@ Resources:
   # ========================================
   # IAM Roles
   # ========================================
-  
+
   ECSTaskExecutionRole:
     Type: AWS::IAM::Role
     Properties:
@@ -354,7 +352,7 @@ Resources:
   # ========================================
   # CloudWatch Logs
   # ========================================
-  
+
   DashboardLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
@@ -364,7 +362,7 @@ Resources:
   # ========================================
   # ECS Task Definition
   # ========================================
-  
+
   DashboardTaskDefinition:
     Type: AWS::ECS::TaskDefinition
     Properties:
@@ -404,7 +402,7 @@ Resources:
   # ========================================
   # ECS Service
   # ========================================
-  
+
   DashboardService:
     Type: AWS::ECS::Service
     DependsOn: ALBListener
@@ -439,19 +437,19 @@ Outputs:
     Value: !Sub 'http://${ApplicationLoadBalancer.DNSName}'
     Export:
       Name: !Sub '${AWS::StackName}-DashboardURL'
-  
+
   ECRRepositoryUri:
     Description: ECR Repository URI for dashboard Docker image
     Value: !GetAtt DashboardRepository.RepositoryUri
     Export:
       Name: !Sub '${AWS::StackName}-ECRRepo'
-  
+
   ECSClusterName:
     Description: ECS Cluster Name
     Value: !Ref ECSCluster
     Export:
       Name: !Sub '${AWS::StackName}-ClusterName'
-  
+
   ECSServiceName:
     Description: ECS Service Name
     Value: !GetAtt DashboardService.Name
