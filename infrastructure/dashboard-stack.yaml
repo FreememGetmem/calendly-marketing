@@ -207,7 +207,7 @@ Resources:
   DashboardRepository:
     Type: AWS::ECR::Repository
     Properties:
-      RepositoryName: !Sub 'calendly-dashboard-${Environment}'
+      RepositoryName: !Sub 'calendly-dashboard-stream-${Environment}'
       ImageScanningConfiguration:
         ScanOnPush: true
       EncryptionConfiguration:
