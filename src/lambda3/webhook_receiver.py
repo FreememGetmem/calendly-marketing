@@ -2,6 +2,7 @@
 Calendly Webhook Receiver Lambda Function
 Receives webhooks from Calendly and streams to Kinesis
 """
+
 import json
 import os
 import boto3
