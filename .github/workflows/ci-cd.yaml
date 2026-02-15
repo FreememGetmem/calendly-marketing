@@ -204,12 +204,12 @@ jobs:
 
       - name: Build, tag, and push dashboard image
         env:
-          ECR_REGISTRY: $(aws sts get-caller-identity Account --output text).dkr.ecr.us-east-1.amazonaws.com
+          ECR_REGISTRY: 635374934580.dkr.ecr.us-east-1.amazonaws.com
           ECR_REPOSITORY: calendly-dashboard-prod
           IMAGE_TAG: streamlit-webhook
         run: |
           cd src/dashboard
-          docker buildx build $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
           docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:latest
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
