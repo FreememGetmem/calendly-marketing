@@ -121,11 +121,14 @@ jobs:
       # -------------------------------------
       - name: Deleting previous stack, checking and copying files
         run: |
-          aws cloudformation delete-stack --stack-name calendly-main-stack-prod --region us-west-1
-          aws cloudformation wait stack-delete-complete --stack-name calendly-main-stack-prod --region us-west-1
+          aws cloudformation delete-stack --stack-name calendly-dashboard-stack-prod --region us-west-1
+          aws cloudformation wait stack-delete-complete --stack-name calendly-dashboard-stack-prod --region us-west-1
 
           aws cloudformation delete-stack --stack-name calendly-glue-jobs-prod --region us-west-1
           aws cloudformation wait stack-delete-complete --stack-name calendly-glue-jobs-prod --region us-west-1
+
+          aws cloudformation delete-stack --stack-name calendly-main-stack-prod --region us-west-1
+          aws cloudformation wait stack-delete-complete --stack-name calendly-main-stack-prod --region us-west-1
 
           aws s3api head-bucket --bucket ${{ secrets.S3_BUCKET }} 2>/dev/null || \
           aws s3api create-bucket \
