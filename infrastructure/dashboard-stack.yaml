@@ -418,7 +418,7 @@ Resources:
       ServiceName: !Sub 'calendly-dashboard-${Environment}'
       Cluster: !Ref ECSCluster
       TaskDefinition: !Ref DashboardTaskDefinition
-      DesiredCount: 0
+      DesiredCount: 1
       LaunchType: FARGATE
       DeploymentConfiguration:
         MaximumPercent: 200
