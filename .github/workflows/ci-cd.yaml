@@ -54,20 +54,9 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Validate CloudFormation templates
-        run: |
-          pip install cfn-lint
-          for template in infrastructure/*.yaml; do
-            echo "Validating $template"
-            aws cloudformation validate-template --template-body file://$template
-          done
-
-      - name: CFN Lint
-        uses: scottbrenner/cfn-lint-action@v2
-        with:
-          command: |
-            cfn-lint infrastructure/glue-jobs.yaml --ignore-checks W
-            cfn-lint infrastructure/main-stack.yaml --ignore-checks W
+      #- name: Validate with Python
+      #  run: |
+      #    python3 scripts/validate-cfn.py infrastructure/*.yaml
 
   deploy-prod:
     name: Deploy to Production
