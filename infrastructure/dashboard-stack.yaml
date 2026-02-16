@@ -11,7 +11,7 @@ Parameters:
 
   MainStackName:
     Type: String
-    Default: calendly-main-stack
+    Default: calendly-main-stack-prod
     Description: Name of the main stack to import values from
 
   DashboardImage:
