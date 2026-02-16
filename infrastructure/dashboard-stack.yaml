@@ -398,6 +398,14 @@ Resources:
               awslogs-group: !Ref DashboardLogGroup
               awslogs-region: !Ref AWS::Region
               awslogs-stream-prefix: dashboard
+          HealthCheck:
+            Command:
+              - CMD-SHELL
+              - curl -f http://localhost:8501/_stcore/health || exit 1
+            Interval: 30
+            Timeout: 5
+            Retries: 3
+            StartPeriod: 60
 
   # ========================================
   # ECS Service
@@ -431,7 +439,6 @@ Resources:
         - ContainerName: dashboard
           ContainerPort: 8501
           TargetGroupArn: !Ref ALBTargetGroup
-      HealthCheckGracePeriodSeconds: 60
       Tags:
         - Key: Name
           Value: !Sub 'calendly-dashboard-${Environment}'
