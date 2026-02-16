@@ -54,9 +54,20 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Validate with Python
+      - name: Validate CloudFormation templates
         run: |
-          python3 scripts/validate-cfn.py infrastructure/*.yaml
+          pip install cfn-lint
+          for template in infrastructure/*.yaml; do
+            echo "Validating $template"
+            aws cloudformation validate-template --template-body file://$template
+          done
+
+      - name: CFN Lint
+        uses: scottbrenner/cfn-lint-action@v2
+        with:
+          command: |
+            cfn-lint infrastructure/glue-jobs.yaml --ignore-checks W
+            cfn-lint infrastructure/main-stack.yaml --ignore-checks W
 
   deploy-prod:
     name: Deploy to Production
@@ -184,7 +195,7 @@ jobs:
               MainStackName=calendly-main-stack-prod \
             --capabilities CAPABILITY_NAMED_IAM \
             --region ${{ env.AWS_REGION }}
-          
+
           echo "Waiting for stack to be ready..."
           aws cloudformation wait stack-create-complete \
             --stack-name calendly-dashboard-stack-prod \
@@ -216,20 +227,20 @@ jobs:
           IMAGE_TAG: ${{ github.sha }}
         run: |
           cd src/dashboard
-          
+
           echo "Building Docker image..."
           docker build -t calendly-dashboard:prod .
-          
+
           echo "Tagging images..."
           docker tag calendly-dashboard:prod $ECR_REPOSITORY:$IMAGE_TAG
           docker tag calendly-dashboard:prod $ECR_REPOSITORY:prod
           docker tag calendly-dashboard:prod $ECR_REPOSITORY:latest
-          
+
           echo "Pushing to ECR..."
           docker push $ECR_REPOSITORY:$IMAGE_TAG
           docker push $ECR_REPOSITORY:prod
           docker push $ECR_REPOSITORY:latest
-          
+
           echo "Images pushed successfully!"
 
       - name: Update ECS service
@@ -240,23 +251,23 @@ jobs:
             --region ${{ env.AWS_REGION }} \
             --query "Stacks[0].Outputs[?OutputKey=='ECSClusterName'].OutputValue" \
             --output text)
-          
+
           SERVICE=$(aws cloudformation describe-stacks \
             --stack-name calendly-dashboard-stack-prod \
             --region ${{ env.AWS_REGION }} \
             --query "Stacks[0].Outputs[?OutputKey=='ECSServiceName'].OutputValue" \
             --output text)
-          
+
           echo "Cluster: $CLUSTER"
           echo "Service: $SERVICE"
-          
+
           echo "Updating ECS service with new image..."
           aws ecs update-service \
             --cluster $CLUSTER \
             --service $SERVICE \
             --force-new-deployment \
             --region ${{ env.AWS_REGION }}
-          
+
           echo "Service update initiated successfully"
 
       - name: Check deployment status
@@ -272,6 +283,6 @@ jobs:
             --region ${{ env.AWS_REGION }} \
             --query "Stacks[0].Outputs[?OutputKey=='DashboardURL'].OutputValue" \
             --output text)
-          
+
           echo "✅ Dashboard deployed successfully!"
           echo "🌐 Access at: $DASHBOARD_URL"
