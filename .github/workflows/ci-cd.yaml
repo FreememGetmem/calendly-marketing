@@ -205,31 +205,42 @@ jobs:
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Build, tag, and push dashboard image
-        env:
-          ECR_REGISTRY: 635374934580.dkr.ecr.us-west-1.amazonaws.com
-          ECR_REPOSITORY: calendly-dashboard-prod
-          IMAGE_TAG: streamlit-webhook
-        run: |
-          cd src/dashboard
-          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
-          docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:latest
-          aws ecr create-repository --repository-name $ECR_REPOSITORY
-          aws ecr get-login-password --region us-west-1  \
-          | docker login --username AWS --password-stdin 635374934580.dkr.ecr.us-west-1.amazonaws.com
-
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
-
-      - name: Deploy dashboard stack
+      # ✅ Step 1: Deploy infrastructure (creates ECR automatically)
+      - name: Deploy dashboard infrastructure
         run: |
           aws cloudformation deploy \
             --template-file infrastructure/dashboard-stack.yaml \
             --stack-name calendly-dashboard-stack-prod \
-            --parameter-overrides \
-              Environment=prod \
-              MainStackName=calendly-main-stack-prod \
-            --capabilities CAPABILITY_NAMED_IAM
+            --capabilities CAPABILITY_NAMED_IAM \
+            --region us-west-1
+
+      # ✅ Step 2: Get ECR URI from CloudFormation
+      - name: Get ECR repository
+        id: ecr
+        run: |
+          URI=$(aws cloudformation describe-stacks \
+            --stack-name calendly-dashboard-stack-prod \
+            --region us-east-1 \
+            --query "Stacks[0].Outputs[?OutputKey=='ECRRepositoryUri'].OutputValue" \
+            --output text)
+          echo "uri=$URI" >> $GITHUB_OUTPUT
+
+      # ✅ Step 3: Login to ECR
+      - name: Login to ECR
+        run: |
+          aws ecr get-login-password --region us-west-1 | \
+            docker login --username AWS --password-stdin \
+            635374934580.dkr.ecr.us-west-1.amazonaws.com
+
+      # ✅ Step 4: Build and push
+      - name: Build and push
+        env:
+          ECR_REPO: ${{ steps.ecr.outputs.uri }}
+        run: |
+          cd src/dashboard
+          docker build -t app .
+          docker tag app $ECR_REPO:latest
+          docker push $ECR_REPO:latest
 
       - name: Update ECS service
         run: |
