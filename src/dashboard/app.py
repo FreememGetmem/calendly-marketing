@@ -39,14 +39,14 @@ try:
 
     # If env vars not set, try secrets (for local/Streamlit Cloud)
     if not GOLD_BUCKET:
-        GOLD_BUCKET = st.secrets.get("GOLD_BUCKET", "calendly-gold-prod-123456789")
+        GOLD_BUCKET = st.secrets.get("GOLD_BUCKET", "calendly-gold-prod-635374934580")
     if not DATABASE_NAME:
         DATABASE_NAME = st.secrets.get("DATABASE_NAME", "calendly_analytics_db")
     if not ATHENA_OUTPUT:
         ATHENA_OUTPUT = st.secrets.get("ATHENA_OUTPUT", f"s3://{GOLD_BUCKET}/athena-results/")
 except Exception:
     # Fallback to defaults if secrets not available
-    GOLD_BUCKET = os.getenv('GOLD_BUCKET', 'calendly-gold-dev-123456789')
+    GOLD_BUCKET = os.getenv('GOLD_BUCKET', 'calendly-gold-prod-635374934580')
     DATABASE_NAME = os.getenv('DATABASE_NAME', 'calendly_analytics_db')
     ATHENA_OUTPUT = f"s3://{GOLD_BUCKET}/athena-results/"
 
