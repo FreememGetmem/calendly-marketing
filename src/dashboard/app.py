@@ -9,7 +9,7 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import boto3
 from datetime import datetime, timedelta
-import json
+import os
 
 # Configure page
 st.set_page_config(
@@ -30,10 +30,25 @@ def init_aws_clients():
 
 clients = init_aws_clients()
 
-# Configuration
-GOLD_BUCKET = st.secrets.get("GOLD_BUCKET", "calendly-gold-dev-123456789")
-DATABASE_NAME = st.secrets.get("DATABASE_NAME", "calendly_analytics_db")
-ATHENA_OUTPUT = st.secrets.get("ATHENA_OUTPUT", f"s3://{GOLD_BUCKET}/athena-results/")
+# Configuration - use environment variables or Streamlit secrets
+try:
+    # Try environment variables first (for ECS/Docker deployment)
+    GOLD_BUCKET = os.getenv('GOLD_BUCKET')
+    DATABASE_NAME = os.getenv('DATABASE_NAME')
+    ATHENA_OUTPUT = os.getenv('ATHENA_OUTPUT')
+
+    # If env vars not set, try secrets (for local/Streamlit Cloud)
+    if not GOLD_BUCKET:
+        GOLD_BUCKET = st.secrets.get("GOLD_BUCKET", "calendly-gold-prod-123456789")
+    if not DATABASE_NAME:
+        DATABASE_NAME = st.secrets.get("DATABASE_NAME", "calendly_analytics_db")
+    if not ATHENA_OUTPUT:
+        ATHENA_OUTPUT = st.secrets.get("ATHENA_OUTPUT", f"s3://{GOLD_BUCKET}/athena-results/")
+except Exception:
+    # Fallback to defaults if secrets not available
+    GOLD_BUCKET = os.getenv('GOLD_BUCKET', 'calendly-gold-dev-123456789')
+    DATABASE_NAME = os.getenv('DATABASE_NAME', 'calendly_analytics_db')
+    ATHENA_OUTPUT = f"s3://{GOLD_BUCKET}/athena-results/"
 
 # Color scheme
 COLORS = {

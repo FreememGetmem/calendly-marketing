@@ -260,6 +260,12 @@ jobs:
             --force-new-deployment \
             --region ${{ env.AWS_REGION }}
 
+          aws ecs update-service \
+            --cluster $CLUSTER \
+            --service $SERVICE \
+            --desired-count 1 \
+            --region ${{ env.AWS_REGION }}
+
           echo "Service update initiated successfully"
 
       - name: Check deployment status

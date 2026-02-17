@@ -16,7 +16,7 @@ Parameters:
 
   DashboardImage:
     Type: String
-    Default: 'public.ecr.aws/docker/library/python:3.11-slim'
+    Default: ''
     Description: Docker image for dashboard (will be replaced with custom image)
 
 Resources:
