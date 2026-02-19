@@ -555,7 +555,7 @@ Resources:
               "Type": "Task",
               "Resource": "arn:aws:states:::glue:startJobRun.sync",
               "Parameters": {
-                "JobName": "calendly-bronze-to-silver"
+                "JobName": "calendly-bronze-to-silver-prod"
               },
               "Retry": [
                 {
@@ -578,7 +578,7 @@ Resources:
               "Type": "Task",
               "Resource": "arn:aws:states:::glue:startJobRun.sync",
               "Parameters": {
-                "JobName": "calendly-silver-to-gold"
+                "JobName": "calendly-silver-to-gold-prod"
               },
               "Retry": [
                 {

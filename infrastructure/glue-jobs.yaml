@@ -4,10 +4,8 @@ Description: 'Calendly Analytics - Glue ETL Jobs'
 Parameters:
   Environment:
     Type: String
-    Default: dev
+    Default: prod
     AllowedValues:
-      - dev
-      - staging
       - prod
 
   MainStackName:
@@ -45,8 +43,8 @@ Resources:
         '--enable-glue-datacatalog': 'true'
         '--datalake-formats': 'delta'
         '--conf': 'spark.sql.extensions=io.delta.sql.DeltaSparkSessionExtension --conf spark.sql.catalog.spark_catalog=org.apache.spark.sql.delta.catalog.DeltaCatalog'
-        '--extra-py-files': 's3://aws-glue-studio-transforms-510798373988-prod-us-east-1/gs_common.py,s3://aws-glue-studio-transforms-510798373988-prod-us-east-1/gs_derived_column.py'
-        '--extra-jars': 's3://aws-glue-studio-transforms-510798373988-prod-us-east-1/delta-core_2.12-2.1.0.jar,s3://aws-glue-studio-transforms-510798373988-prod-us-east-1/delta-storage-2.1.0.jar'
+        '--extra-py-files': ''
+        '--extra-jars': 's3://calendly-artifacts-prod-635374934580/jars/delta-core_2.12-2.1.0.jar,s3://calendly-artifacts-prod-635374934580/jars/delta-storage-2.1.0.jar'
         '--bronze_bucket':
           Fn::ImportValue: !Sub '${MainStackName}-BronzeBucket'
         '--silver_bucket':
@@ -89,8 +87,8 @@ Resources:
         '--enable-glue-datacatalog': 'true'
         '--datalake-formats': 'delta'
         '--conf': 'spark.sql.extensions=io.delta.sql.DeltaSparkSessionExtension --conf spark.sql.catalog.spark_catalog=org.apache.spark.sql.delta.catalog.DeltaCatalog'
-        '--extra-py-files': 's3://aws-glue-studio-transforms-510798373988-prod-us-east-1/gs_common.py,s3://aws-glue-studio-transforms-510798373988-prod-us-east-1/gs_derived_column.py'
-        '--extra-jars': 's3://aws-glue-studio-transforms-510798373988-prod-us-east-1/delta-core_2.12-2.1.0.jar,s3://aws-glue-studio-transforms-510798373988-prod-us-east-1/delta-storage-2.1.0.jar'
+        '--extra-py-files': ''
+        '--extra-jars': 's3://calendly-artifacts-prod-635374934580/jars/delta-core_2.12-2.1.0.jar,s3://calendly-artifacts-prod-635374934580/jars/delta-storage-2.1.0.jar'
         '--silver_bucket':
           Fn::ImportValue: !Sub '${MainStackName}-SilverBucket'
         '--gold_bucket':
