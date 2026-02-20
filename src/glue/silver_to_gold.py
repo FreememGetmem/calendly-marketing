@@ -400,10 +400,7 @@ def write_to_gold(df: DataFrame, path: str, table_name: str):
 
     # Write as Delta table
     try:
-        df.write.format("delta") \
-            .mode("overwrite") \
-            .option("overwriteSchema", "true") \
-            .save(path)
+        df.write.mode("overwrite").parquet(path)
     except Exception as e:
         print(f"❌ ERROR writing to {path}: {str(e)}")
         raise

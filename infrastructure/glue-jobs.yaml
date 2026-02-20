@@ -56,8 +56,9 @@ Resources:
       MaxRetries: 2
       Timeout: 60
       GlueVersion: '4.0'
-      NumberOfWorkers: 5
+      NumberOfWorkers: 2
       WorkerType: G.1X
+      MaxCapacity: 10
       Tags:
         Environment: !Ref Environment
         Layer: Silver
@@ -100,8 +101,9 @@ Resources:
       MaxRetries: 2
       Timeout: 60
       GlueVersion: '4.0'
-      NumberOfWorkers: 5
+      NumberOfWorkers: 2
       WorkerType: G.1X
+      MaxCapacity: 10
       Tags:
         Environment: !Ref Environment
         Layer: Gold
