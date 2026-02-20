@@ -109,6 +109,8 @@ jobs:
       - name: Upload Glue scripts to S3
         run: |
           aws s3 sync src/glue/ s3://${{ secrets.S3_BUCKET }}/scripts/
+          aws s3 cp src/glue-delta-librairies/delta-core_2.12-2.1.0.jar s3://${{ secrets.S3_BUCKET }}/jars/
+          aws s3 cp src/glue-delta-librairies/delta-storage-2.1.0.jar s3://${{ secrets.S3_BUCKET }}/jars/
 
       - name: Deploy main CloudFormation stack
         run: |
