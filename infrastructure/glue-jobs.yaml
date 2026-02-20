@@ -58,7 +58,6 @@ Resources:
       GlueVersion: '4.0'
       NumberOfWorkers: 2
       WorkerType: G.1X
-      MaxCapacity: 10
       Tags:
         Environment: !Ref Environment
         Layer: Silver
@@ -103,7 +102,6 @@ Resources:
       GlueVersion: '4.0'
       NumberOfWorkers: 2
       WorkerType: G.1X
-      MaxCapacity: 10
       Tags:
         Environment: !Ref Environment
         Layer: Gold
