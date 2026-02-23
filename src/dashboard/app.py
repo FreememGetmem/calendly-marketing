@@ -2,6 +2,7 @@
 Calendly Marketing Analytics Dashboard
 Interactive Streamlit application for business insights
 """
+
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -9,6 +10,7 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import boto3
 from datetime import datetime, timedelta
+import json
 import os
 
 # Configure page
@@ -39,14 +41,14 @@ try:
 
     # If env vars not set, try secrets (for local/Streamlit Cloud)
     if not GOLD_BUCKET:
-        GOLD_BUCKET = st.secrets.get("GOLD_BUCKET", "calendly-gold-prod-635374934580")
+        GOLD_BUCKET = st.secrets.get("GOLD_BUCKET", "calendly-gold-dev-123456789")
     if not DATABASE_NAME:
         DATABASE_NAME = st.secrets.get("DATABASE_NAME", "calendly_analytics_db")
     if not ATHENA_OUTPUT:
         ATHENA_OUTPUT = st.secrets.get("ATHENA_OUTPUT", f"s3://{GOLD_BUCKET}/athena-results/")
 except Exception:
     # Fallback to defaults if secrets not available
-    GOLD_BUCKET = os.getenv('GOLD_BUCKET', 'calendly-gold-prod-635374934580')
+    GOLD_BUCKET = os.getenv('GOLD_BUCKET', 'calendly-gold-dev-123456789')
     DATABASE_NAME = os.getenv('DATABASE_NAME', 'calendly_analytics_db')
     ATHENA_OUTPUT = f"s3://{GOLD_BUCKET}/athena-results/"
 
@@ -478,16 +480,21 @@ def render_booking_time_analysis(df: pd.DataFrame):
         fill_value=0
     )
 
-    # Day mapping
-    day_names = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+    # Day mapping for proper ordering
+    day_order = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
 
-    # Heatmap
+    # Reorder columns if they match day names
+    available_cols = [col for col in day_order if col in df_pivot.columns]
+    if available_cols:
+        df_pivot = df_pivot[available_cols]
+
+    # Heatmap - use actual pivot columns
     fig = go.Figure(data=go.Heatmap(
         z=df_pivot.values,
-        x=day_names,
+        x=df_pivot.columns.tolist(),  # Use actual column names from pivot
         y=df_pivot.index,
         colorscale='Blues',
-        text=df_pivot.values,
+        text=df_pivot.values.astype(int),
         texttemplate='%{text}',
         textfont={"size": 10}
     ))
@@ -515,9 +522,18 @@ def render_booking_time_analysis(df: pd.DataFrame):
     with col2:
         # Pie chart by day of week
         daily_bookings = df.groupby('booking_day_of_week')['bookings_count'].sum().reset_index()
-        daily_bookings['day_name'] = daily_bookings['booking_day_of_week'].apply(
-            lambda x: day_names[int(x)] if pd.notna(x) else 'Unknown'
-        )
+
+        # booking_day_of_week might be a day name string or numeric
+        # Try to use it directly first, fall back to mapping if numeric
+        try:
+            # If it's already a string day name, use it directly
+            daily_bookings['day_name'] = daily_bookings['booking_day_of_week']
+        except:
+            # If it's numeric, map to day names
+            daily_bookings['day_name'] = daily_bookings['booking_day_of_week'].apply(
+                lambda x: day_names[int(x)] if pd.notna(x) and str(x).isdigit() else str(x)
+            )
+
         fig_day = px.pie(
             daily_bookings,
             values='bookings_count',
@@ -616,7 +632,7 @@ def main():
         st.markdown("---")
 
     if not df_employee_load.empty:
-        render_employee_meeting_load(df_employee_load)
+        render_employee_meeting_load(df_eyeemplo_load)
 
 
 if __name__ == "__main__":

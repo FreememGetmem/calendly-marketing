@@ -9,6 +9,7 @@ import boto3
 from datetime import datetime
 from typing import Dict, Any
 import logging
+import uuid
 
 # Configure logging
 logger = logging.getLogger()
@@ -108,7 +109,12 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         }
 
         # Store raw webhook in S3 for audit/replay
-        s3_key = f"webhooks/{webhook_event}/{datetime.utcnow().strftime('%Y/%m/%d')}/{context.request_id}.json"
+        request_id = getattr(context, "aws_request_id", str(uuid.uuid4()))
+        s3_key = (
+            f"webhooks/{webhook_event}/"
+            f"{datetime.utcnow().strftime('%Y/%m/%d')}/"
+            f"{request_id}.json"
+        )
         s3_client.put_object(
             Bucket=RAW_BUCKET,
             Key=s3_key,

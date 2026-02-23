@@ -34,6 +34,9 @@ job.init(args['JOB_NAME'], args)
 # Delta Lake configuration is set via job parameters (--conf and --extra-jars)
 # Static configs cannot be modified after Spark session is initialized
 
+spark.conf.set("spark.databricks.delta.schema.autoMerge.enabled", "true")
+spark.conf.set("spark.databricks.delta.columnMapping.mode", "name")
+
 # Parameters with validation
 BRONZE_BUCKET = args.get('bronze_bucket', '')
 SILVER_BUCKET = args.get('silver_bucket', '')
@@ -69,7 +72,7 @@ def process_calendly_events():
 
         # Data cleaning and validation
         df_clean = clean_calendly_events(df_events)
-
+        df_clean = sanitize_column_names(df_clean)
         # Write to Silver layer as Delta table
         silver_path = f"s3://{SILVER_BUCKET}/calendly_events_silver/"
 
@@ -120,61 +123,58 @@ def process_calendly_events():
         print(f"Error processing Calendly events: {str(e)}")
         raise
 
+import re
 
-def clean_calendly_events(df: DataFrame) -> DataFrame:
+def sanitize_column_names(df):
     """
-    Clean and validate Calendly events data
-    Extract nested fields from payload struct
-
-    Args:
-        df: Raw DataFrame from Bronze layer with parsed JSON struct
-
-    Returns:
-        Cleaned DataFrame
+    Clean column names to be Delta Lake compatible
     """
-    from pyspark.sql.functions import col, current_timestamp, substring, regexp_extract, dayofweek, hour
+    new_cols = []
+    for col_name in df.columns:
+        clean = re.sub(r'[^a-zA-Z0-9_]', '_', col_name)
+        clean = re.sub(r'_+', '_', clean)
+        clean = clean.lower()
+        new_cols.append(clean)
 
-    # Access nested struct fields directly (payload is already parsed as struct)
+    return df.toDF(*new_cols)
+
+
+def clean_calendly_events(df):
+
+    from pyspark.sql.functions import col, lit
+    from pyspark.sql.types import TimestampType, StringType
+
+    def safe_col(name, dtype=StringType()):
+        if name in df.columns:
+            return col(name)
+        else:
+            return lit(None).cast(dtype)
+
     df_parsed = df.select(
-        # Top-level fields
-        col("webhook_event"),
-        col("webhook_received_at").cast(TimestampType()),
-        col("marketing_channel"),
-        col("event_type_url"),
+        safe_col("webhook_event"),
+        safe_col("webhook_received_at", TimestampType()),
+        safe_col("marketing_channel"),
+        safe_col("event_type_url"),
 
-        # Nested payload fields (using struct notation)
-        col("payload.payload.uri").alias("invitee_uri"),
-        col("payload.payload.email").alias("invitee_email"),
-        col("payload.payload.name").alias("invitee_name"),
-        col("payload.payload.status").alias("invitee_status"),
-        col("payload.payload.timezone").alias("invitee_timezone"),
-        col("payload.payload.text_reminder_number").alias("invitee_phone"),
-        col("payload.payload.created_at").cast(TimestampType()).alias("invitee_created_at"),
-        col("payload.payload.updated_at").cast(TimestampType()).alias("invitee_updated_at"),
-        col("payload.payload.canceled").alias("invitee_canceled"),
-        col("payload.payload.rescheduled").alias("invitee_rescheduled"),
+        safe_col("invitee_uri"),
+        safe_col("invitee_email"),
+        safe_col("invitee_name"),
+        safe_col("invitee_status"),
+        safe_col("invitee_timezone"),
+        safe_col("invitee_phone"),
+        safe_col("invitee_created_at", TimestampType()),
+        safe_col("invitee_updated_at", TimestampType()),
 
-        # Scheduled event details
-        col("payload.payload.scheduled_event.name").alias("event_name"),
-        col("payload.payload.scheduled_event.status").alias("event_status"),
-        col("payload.payload.scheduled_event.start_time").cast(TimestampType()).alias("event_start_time"),
-        col("payload.payload.scheduled_event.end_time").cast(TimestampType()).alias("event_end_time"),
-        col("payload.payload.scheduled_event.created_at").cast(TimestampType()).alias("event_created_at"),
-        col("payload.payload.scheduled_event.event_type").alias("event_type"),
+        safe_col("scheduled_event_name"),
+        safe_col("scheduled_event_status"),
+        safe_col("scheduled_event_start_time", TimestampType()),
+        safe_col("scheduled_event_end_time", TimestampType()),
 
-        # Tracking info
-        col("payload.payload.tracking.utm_campaign").alias("utm_campaign"),
-        col("payload.payload.tracking.utm_source").alias("utm_source"),
-        col("payload.payload.tracking.utm_medium").alias("utm_medium"),
-        col("payload.payload.tracking.utm_content").alias("utm_content"),
-        col("payload.payload.tracking.utm_term").alias("utm_term"),
-
-        # Location info
-        col("payload.payload.scheduled_event.location.type").alias("location_type"),
-        col("payload.payload.scheduled_event.location.join_url").alias("location_join_url"),
-
-        # Metadata
-        current_timestamp().alias("processed_at")
+        safe_col("utm_campaign"),
+        safe_col("utm_source"),
+        safe_col("utm_medium"),
+        safe_col("utm_content"),
+        safe_col("utm_term"),
     )
 
     # Add derived columns
@@ -186,7 +186,7 @@ def clean_calendly_events(df: DataFrame) -> DataFrame:
         regexp_extract(col("invitee_name"), "\\s+(\\S+)$", 1)
     ).withColumn(
         "booking_date",
-        col("event_start_time").cast("date")
+        col("scheduled_event_start_time").cast("date")
     ).withColumn(
         "booking_year",
         substring(col("booking_date").cast("string"), 1, 4)
@@ -195,10 +195,10 @@ def clean_calendly_events(df: DataFrame) -> DataFrame:
         substring(col("booking_date").cast("string"), 6, 2)
     ).withColumn(
         "booking_day_of_week",
-        dayofweek(col("event_start_time"))
+        dayofweek(col("scheduled_event_start_time"))
     ).withColumn(
         "booking_hour",
-        hour(col("event_start_time"))
+        hour(col("scheduled_event_start_time"))
     )
 
     # Filter out null invitee_uri (invalid records)
@@ -273,15 +273,17 @@ def process_marketing_spend():
 
 
 def clean_marketing_spend(df: DataFrame) -> DataFrame:
-    """
-    Clean and validate marketing spend data
 
-    Args:
-        df: Raw DataFrame from Bronze layer
+    # Add missing metadata columns if they do not exist
+    if "ingested_at" not in df.columns:
+        df = df.withColumn("ingested_at", current_timestamp())
 
-    Returns:
-        Cleaned DataFrame
-    """
+    if "source_file" not in df.columns:
+        df = df.withColumn("source_file", lit(None).cast(StringType()))
+
+    if "ingestion_date" not in df.columns:
+        df = df.withColumn("ingestion_date", current_date())
+
     df_clean = df.select(
         col("date").cast(DateType()),
         col("channel"),
@@ -291,12 +293,12 @@ def clean_marketing_spend(df: DataFrame) -> DataFrame:
         col("ingestion_date").cast(DateType())
     )
 
-    # Extract date partitions
+    # Partition columns
     df_clean = df_clean.withColumn("year", year(col("date"))) \
         .withColumn("month", month(col("date"))) \
         .withColumn("day", dayofmonth(col("date")))
 
-    # Data quality checks
+    # Data quality filters
     df_clean = df_clean.filter(
         col("date").isNotNull() &
         col("channel").isNotNull() &
@@ -304,14 +306,17 @@ def clean_marketing_spend(df: DataFrame) -> DataFrame:
         (col("spend") >= 0)
     )
 
-    # Remove duplicates (keep latest ingestion)
-    window_spec = Window.partitionBy("date", "channel").orderBy(col("ingested_at").desc())
+    # Deduplication
+    window_spec = Window.partitionBy("date", "channel") \
+        .orderBy(col("ingested_at").desc())
+
     df_clean = df_clean.withColumn("row_num", row_number().over(window_spec)) \
         .filter(col("row_num") == 1) \
         .drop("row_num")
 
-    # Add processing metadata
-    df_clean = df_clean.withColumn("silver_processing_timestamp", current_timestamp())
+    df_clean = df_clean.withColumn(
+        "silver_processing_timestamp", current_timestamp()
+    )
 
     return df_clean
 
