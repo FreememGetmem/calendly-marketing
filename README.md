@@ -184,3 +184,15 @@ booking_day_of_week: string
 booking_hour: int
 processed_at: timestamp
 ```
+## Gold mertics
+```
+booking_time_analysis
+bookings_trend
+channel_attribution
+cost_per_booking
+daily_bookings_by_source
+```
+
+## Strealimt Dashboard
+
+http://calendly-dashboard-alb-prod-2005536559.us-west-1.elb.amazonaws.com/
